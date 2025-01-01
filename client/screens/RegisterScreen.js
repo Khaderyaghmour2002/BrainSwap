@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { View, StyleSheet, TouchableOpacity } from "react-native";
 import { Text } from "react-native-paper";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 
 import Background from "../components/Background";
 import Logo from "../components/Logo";
@@ -13,12 +15,16 @@ import { emailValidator } from "../helpers/emailValidator";
 import { passwordValidator } from "../helpers/passwordValidator";
 import { nameValidator } from "../helpers/nameValidator";
 
+// Import Firebase utilities
+import { auth, firestore } from "../../server/firebaseConfig";  
+
 export default function RegisterScreen({ navigation }) {
   const [name, setName] = useState({ value: "", error: "" });
   const [email, setEmail] = useState({ value: "", error: "" });
   const [password, setPassword] = useState({ value: "", error: "" });
+  const [loading, setLoading] = useState(false);
 
-  const onSignUpPressed = () => {
+  const onSignUpPressed = async () => {
     const nameError = nameValidator(name.value);
     const emailError = emailValidator(email.value);
     const passwordError = passwordValidator(password.value);
@@ -28,10 +34,33 @@ export default function RegisterScreen({ navigation }) {
       setPassword({ ...password, error: passwordError });
       return;
     }
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "HomeScreen" }],
-    });
+
+    setLoading(true);
+
+    try {
+      // Create a new user with Firebase Authentication
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,  // This refers to the imported auth
+        email.value,
+        password.value
+      );
+
+      // Save user details in Firestore
+      const userDocRef = doc(firestore, "users", userCredential.user.uid);
+      await setDoc(userDocRef, {
+        name: name.value,
+        email: email.value,
+      });
+
+      setLoading(false);
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "HomeScreen" }],
+      });
+    } catch (error) {
+      setLoading(false);
+      alert(`Registration failed: ${error.message}`);
+    }
   };
 
   return (
@@ -72,11 +101,12 @@ export default function RegisterScreen({ navigation }) {
         mode="contained"
         onPress={onSignUpPressed}
         style={{ marginTop: 24 }}
+        loading={loading}
       >
-        Next
+        Register
       </Button>
       <View style={styles.row}>
-        <Text>I already have an account !</Text>
+        <Text>I already have an account!</Text>
       </View>
       <View style={styles.row}>
         <TouchableOpacity onPress={() => navigation.replace("LoginScreen")}>
