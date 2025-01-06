@@ -1,200 +1,385 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Button, Alert, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
-import { Avatar, Checkbox } from 'react-native-paper';
-import { FirebaseAuth, FirebaseFirestore } from "../../firebaseConfig";
-import { launchImageLibrary } from 'react-native-image-picker';
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Dimensions,
+} from "react-native";
+import Ionicons from "react-native-vector-icons/Ionicons";
 
-export default function ProfileScreen() {
-  const predefinedSkills = [
-    "Programming", "Graphic Design", "Cooking", "Public Speaking", "Photography",
-    "Video Editing", "Writing", "Digital Marketing", "SEO", "Web Development",
-    "UI/UX Design", "Painting", "Music Production", "Piano", "Guitar",
-    "Yoga", "Fitness Training", "Data Analysis", "Machine Learning", "AI",
-    "English", "French", "Spanish", "German", "Mandarin Chinese",
-    "Excel", "PowerPoint", "Leadership", "Project Management", "Time Management",
-    "Finance", "Accounting", "Entrepreneurship", "Chess", "Gardening",
-    "Baking", "Sewing", "Animation", "Software Testing", "Cloud Computing",
-    "Cybersecurity", "Interior Design", "Fashion Design", "Public Relations",
-    "Legal Research", "Carpentry", "Event Planning", "Writing Resumes", "Translation",
-    "Customer Service", "Meditation",
+const { width } = Dimensions.get("window");
+
+function HomeTabContent() {
+  const userName = "Alice";
+  const upcomingSessions = [
+    { date: "Oct 14", title: "Teaching: French Basics" },
+    { date: "Oct 20", title: "Learning: Advanced Guitar" },
+  ];
+  const recommendedMentors = [
+    { name: "John", skill: "Machine Learning" },
+    { name: "Maria", skill: "Graphic Design" },
   ];
 
-  const [name, setName] = useState("");
-  const [selectedSkillsToTeach, setSelectedSkillsToTeach] = useState([]);
-  const [selectedSkillsToLearn, setSelectedSkillsToLearn] = useState([]);
-  const [availability, setAvailability] = useState("");
-  const [profileImage, setProfileImage] = useState(null);
-
-  const currentUser = FirebaseAuth.currentUser;
-
-  // Fetch user profile on component mount
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (currentUser) {
-        const userDocRef = doc(FirebaseFirestore, "users", currentUser.uid);
-        try {
-          const docSnap = await getDoc(userDocRef);
-          if (docSnap.exists()) {
-            const userData = docSnap.data();
-            setName(userData.name || currentUser.displayName || "");
-            setProfileImage(userData.profileImage || null);
-            setSelectedSkillsToTeach(userData.skillsToTeach || []);
-            setSelectedSkillsToLearn(userData.skillsToLearn || []);
-            setAvailability(userData.availability || "Not set");
-          } else {
-            console.log("No profile found in Firestore.");
-          }
-        } catch (error) {
-          console.error("Error fetching profile: ", error);
-        }
-      }
-    };
-
-    fetchProfile();
-  }, []);
-
-  const toggleSkill = (skill, isTeachList) => {
-    const selectedList = isTeachList ? selectedSkillsToTeach : selectedSkillsToLearn;
-    const updateList = selectedList.includes(skill)
-      ? selectedList.filter(s => s !== skill)
-      : [...selectedList, skill];
-    isTeachList ? setSelectedSkillsToTeach(updateList) : setSelectedSkillsToLearn(updateList);
-  };
-
-  const saveProfileData = async () => {
-    if (!name || selectedSkillsToTeach.length === 0 || selectedSkillsToLearn.length === 0) {
-      Alert.alert("Please fill in all required fields.");
-      return;
-    }
-
-    const userData = {
-      name,
-      skillsToTeach: selectedSkillsToTeach,
-      skillsToLearn: selectedSkillsToLearn,
-      availability,
-      profileImage,
-    };
-
-    try {
-      if (currentUser) {
-        const userDocRef = doc(FirebaseFirestore, "users", currentUser.uid);
-        await setDoc(userDocRef, userData, { merge: true });
-        Alert.alert("Profile updated successfully!");
-      }
-    } catch (error) {
-      console.error("Error saving profile data: ", error);
-      Alert.alert("Error", "Failed to save profile. Please try again.");
-    }
-  };
-
-  const SkillSelection = ({ skills, selectedSkills, toggleSkill, label }) => (
-    <View style={styles.skillsContainer}>
-      <Text style={styles.sectionTitle}>{label}</Text>
-      <FlatList
-        data={skills}
-        keyExtractor={(item) => item}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.skillItem}
-            onPress={() => toggleSkill(item, label === "Skills to Teach")}
-          >
-            <Checkbox
-              status={selectedSkills.includes(item) ? "checked" : "unchecked"}
-              onPress={() => toggleSkill(item, label === "Skills to Teach")}
-            />
-            <Text>{item}</Text>
-          </TouchableOpacity>
-        )}
-        style={styles.skillsList}
-      />
-    </View>
-  );
-
   return (
-    <View style={styles.container}>
-      <View style={styles.avatarContainer}>
-        {profileImage ? (
-          <Avatar.Image size={100} source={{ uri: profileImage }} />
-        ) : (
-          <Avatar.Text size={100} label={name ? name[0] : "U"} />
-        )}
-        <Button title="Change Profile Picture" onPress={() => launchImageLibrary()} />
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <View style={styles.header}>
+        <Text style={styles.greeting}>Hello, {userName}!</Text>
+        <Text style={styles.subGreeting}>Welcome back to SkillShare</Text>
       </View>
 
-      <Text style={styles.sectionTitle}>Name *</Text>
-      <TextInput
-        style={styles.input}
-        value={name}
-        onChangeText={setName}
-        placeholder="Your name"
-      />
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Upcoming Sessions</Text>
+        {upcomingSessions.length === 0 ? (
+          <Text style={styles.placeholderText}>No scheduled sessions yet.</Text>
+        ) : (
+          upcomingSessions.map((session, index) => (
+            <View key={index} style={styles.sessionCard}>
+              <Text style={styles.sessionDate}>{session.date}</Text>
+              <Text style={styles.sessionTitle}>{session.title}</Text>
+            </View>
+          ))
+        )}
+      </View>
 
-      {/* Skills to Teach */}
-      <SkillSelection
-        skills={predefinedSkills}
-        selectedSkills={selectedSkillsToTeach}
-        toggleSkill={toggleSkill}
-        label="Skills to Teach"
-      />
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Recommended Mentors</Text>
+        {recommendedMentors.length === 0 ? (
+          <Text style={styles.placeholderText}>No recommendations at this time.</Text>
+        ) : (
+          recommendedMentors.map((item, index) => (
+            <View key={index} style={styles.matchCard}>
+              <Text style={styles.matchName}>{item.name}</Text>
+              <Text style={styles.matchSkill}>Expert in {item.skill}</Text>
+            </View>
+          ))
+        )}
+      </View>
+    </ScrollView>
+  );
+}
 
-      {/* Skills to Learn */}
-      <SkillSelection
-        skills={predefinedSkills}
-        selectedSkills={selectedSkillsToLearn}
-        toggleSkill={toggleSkill}
-        label="Skills to Learn"
-      />
+function ChatTabContent() {
+  return (
+    <View style={styles.center}>
+      <Text style={styles.placeholderTitle}>Chat Screen</Text>
+      <Text>This is a placeholder for Chat.</Text>
+    </View>
+  );
+}
 
-      <Text style={styles.sectionTitle}>Availability</Text>
-      <TextInput
-        style={styles.input}
-        value={availability}
-        onChangeText={setAvailability}
-        placeholder="E.g., Weekends, Evenings"
-      />
+function MatchesTabContent() {
+  return (
+    <View style={styles.center}>
+      <Text style={styles.placeholderTitle}>Matches Screen</Text>
+      <Text>This is a placeholder for Matches / Community.</Text>
+    </View>
+  );
+}
 
-      <Button title="Save Profile" onPress={saveProfileData} />
+function ProfileTabContent() {
+  return (
+    <View style={styles.center}>
+      <Text style={styles.placeholderTitle}>Profile Screen</Text>
+      <Text>This is a placeholder for the user’s profile.</Text>
+    </View>
+  );
+}
+
+function RequestsTabContent() {
+  return (
+    <View style={styles.center}>
+      <Text style={styles.placeholderTitle}>Requests Screen</Text>
+      <Text>This is a placeholder for user requests or sessions.</Text>
+    </View>
+  );
+}
+
+export default function HomeScreenWithCustomNav() {
+  const [activeTab, setActiveTab] = useState("home");
+
+  let mainContent;
+  switch (activeTab) {
+    case "chat":
+      mainContent = <ChatTabContent />;
+      break;
+    case "matches":
+      mainContent = <MatchesTabContent />;
+      break;
+    case "profile":
+      mainContent = <ProfileTabContent />;
+      break;
+    case "requests":
+      mainContent = <RequestsTabContent />;
+      break;
+    default:
+      mainContent = <HomeTabContent />;
+      break;
+  }
+
+  return (
+    <View style={styles.fullContainer}>
+      <View style={styles.body}>{mainContent}</View>
+
+      {/* Custom bottom bar */}
+      <View style={styles.bottomBar}>
+        {/* Home Button */}
+        <TouchableOpacity
+          style={[
+            styles.bottomBarButton,
+            activeTab === "home" && styles.bottomBarButtonActive,
+          ]}
+          onPress={() => setActiveTab("home")}
+        >
+          <Ionicons
+            style={styles.iconNoShadow}
+            name="home-outline"
+            size={24}
+            color={activeTab === "home" ? "#333" : "#333"}
+          />
+          <Text
+            style={[
+              styles.bottomBarText,
+              activeTab === "home" && styles.moreBoldText, // 900 weight if active
+            ]}
+          >
+            Home
+          </Text>
+        </TouchableOpacity>
+
+        {/* Chat Button */}
+        <TouchableOpacity
+          style={[
+            styles.bottomBarButton,
+            activeTab === "chat" && styles.bottomBarButtonActive,
+          ]}
+          onPress={() => setActiveTab("chat")}
+        >
+          <Ionicons
+            style={styles.iconNoShadow}
+            name="chatbubble-outline"
+            size={24}
+            color={activeTab === "chat" ? "#333" : "#333"}
+          />
+          <Text
+            style={[
+              styles.bottomBarText,
+              activeTab === "chat" && styles.moreBoldText,
+            ]}
+          >
+            Chat
+          </Text>
+        </TouchableOpacity>
+
+        {/* Matches Button */}
+        <TouchableOpacity
+          style={[
+            styles.bottomBarButton,
+            activeTab === "matches" && styles.bottomBarButtonActive,
+          ]}
+          onPress={() => setActiveTab("matches")}
+        >
+          <Ionicons
+            style={styles.iconNoShadow}
+            name="people-circle-outline"
+            size={24}
+            color={activeTab === "matches" ? "#333" : "#333"}
+          />
+          <Text
+            style={[
+              styles.bottomBarText,
+              activeTab === "matches" && styles.moreBoldText,
+            ]}
+          >
+            Matches
+          </Text>
+        </TouchableOpacity>
+
+        {/* Profile Button */}
+        <TouchableOpacity
+          style={[
+            styles.bottomBarButton,
+            activeTab === "profile" && styles.bottomBarButtonActive,
+          ]}
+          onPress={() => setActiveTab("profile")}
+        >
+          <Ionicons
+            style={styles.iconNoShadow}
+            name="person-outline"
+            size={24}
+            color={activeTab === "profile" ? "#333" : "#333"}
+          />
+          <Text
+            style={[
+              styles.bottomBarText,
+              activeTab === "profile" && styles.moreBoldText,
+            ]}
+          >
+            Profile
+          </Text>
+        </TouchableOpacity>
+
+        {/* Requests Button */}
+        <TouchableOpacity
+          style={[
+            styles.bottomBarButton,
+            activeTab === "requests" && styles.bottomBarButtonActive,
+          ]}
+          onPress={() => setActiveTab("requests")}
+        >
+          <Ionicons
+            style={styles.iconNoShadow}
+            name="notifications-outline"
+            size={24}
+            color={activeTab === "requests" ? "#333" : "#333"}
+          />
+          <Text
+            style={[
+              styles.bottomBarText,
+              activeTab === "requests" && styles.moreBoldText,
+            ]}
+          >
+            Requests
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  fullContainer: {
     flex: 1,
-    padding: 20,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#f3f6ff",
   },
-  avatarContainer: {
-    alignItems: "center",
-    marginBottom: 20,
+  body: {
+    flex: 1,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginVertical: 10,
-  },
-  input: {
-    borderWidth: 1,
-    padding: 10,
-    marginVertical: 8,
-    borderRadius: 5,
-    backgroundColor: "#fff",
-  },
-  skillsContainer: {
-    marginBottom: 20,
-  },
-  skillsList: {
-    maxHeight: 150,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 5,
-    backgroundColor: "#fff",
-  },
-  skillItem: {
+
+  /* 
+   * Lighter Gray Bottom Bar
+   * #eee background
+   * #ddd for active button
+   */
+  bottomBar: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 8,
+    justifyContent: "space-around",
+    paddingVertical: 10,
+    backgroundColor: "#eee",
+    borderTopColor: "#ccc",
+    borderTopWidth: 1,
+  },
+  bottomBarButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    marginHorizontal: 4,
+    borderRadius: 25,
+    backgroundColor: "transparent",
+  },
+  bottomBarButtonActive: {
+    backgroundColor: "#ddd",
+  },
+  bottomBarText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+    paddingVertical: 4,
+  },
+  moreBoldText: {
+    fontWeight: "900",
+  },
+
+  // Remove any default text shadow in Ionicons
+  iconNoShadow: {
+    textShadowColor: "transparent",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
+
+  // Original Home content / placeholders
+  container: {
+    flex: 1,
+    backgroundColor: "#f3f6ff",
+  },
+  contentContainer: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  header: {
+    marginTop: 20,
+    marginBottom: 20,
+    alignItems: "center",
+  },
+  greeting: {
+    fontSize: 26,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 8,
+  },
+  subGreeting: {
+    fontSize: 16,
+    color: "#555",
+  },
+  section: {
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 16,
+    marginTop: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 10,
+    color: "#2b3a67",
+  },
+  placeholderText: {
+    fontSize: 14,
+    color: "#999",
+  },
+  sessionCard: {
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+  },
+  sessionDate: {
+    fontSize: 13,
+    color: "#666",
+  },
+  sessionTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
+    marginTop: 4,
+  },
+  matchCard: {
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+  },
+  matchName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
+  },
+  matchSkill: {
+    fontSize: 13,
+    color: "#777",
+  },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  placeholderTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#333",
+    marginBottom: 6,
   },
 });

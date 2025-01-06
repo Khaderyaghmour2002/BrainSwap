@@ -31,7 +31,7 @@ export default function LoginScreen({ navigation }) {
       await signInWithEmailAndPassword(FirebaseAuth, email.value, password.value);
       navigation.reset({
         index: 0,
-        routes: [{ name: "ProfileMakerScreen" }],
+        routes: [{ name: "HomeScreen" }],
       });
     } catch (error) {
       Alert.alert("Login Failed", error.message);

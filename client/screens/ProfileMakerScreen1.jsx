@@ -57,7 +57,7 @@ export default function SkillsToTeachScreen({ navigation }) {
       );
   
       // Then navigate or do any success action
-      navigation.replace("ProfileMakerScreen1");
+      navigation.replace("HomeScreen");
     } catch (error) {
       console.error("Error saving skills to Firestore:", error);
       Alert.alert("Error", "Unable to save skills. Please try again.");
