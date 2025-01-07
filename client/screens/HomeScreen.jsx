@@ -9,8 +9,18 @@ import {
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 
+// 1) Import your separate Profile screen here:
+import ProfileScreen from "./ProfileScreen"; // Adjust path as needed
+
 const { width } = Dimensions.get("window");
 
+/* 
+  2) Here are your individual tab content components 
+  (Home, Chat, Matches, Requests) as simple placeholders. 
+  “Profile” has been moved to ProfileScreen.js, which we imported above.
+*/
+
+// ----------- Home Tab Content -----------
 function HomeTabContent() {
   const userName = "Alice";
   const upcomingSessions = [
@@ -24,11 +34,13 @@ function HomeTabContent() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      {/* Greeting / Header */}
       <View style={styles.header}>
         <Text style={styles.greeting}>Hello, {userName}!</Text>
         <Text style={styles.subGreeting}>Welcome back to SkillShare</Text>
       </View>
 
+      {/* Upcoming Sessions Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Upcoming Sessions</Text>
         {upcomingSessions.length === 0 ? (
@@ -43,6 +55,7 @@ function HomeTabContent() {
         )}
       </View>
 
+      {/* Recommended Mentors or People */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Recommended Mentors</Text>
         {recommendedMentors.length === 0 ? (
@@ -60,6 +73,7 @@ function HomeTabContent() {
   );
 }
 
+// ----------- Chat Tab Content -----------
 function ChatTabContent() {
   return (
     <View style={styles.center}>
@@ -69,6 +83,7 @@ function ChatTabContent() {
   );
 }
 
+// ----------- Matches Tab Content -----------
 function MatchesTabContent() {
   return (
     <View style={styles.center}>
@@ -78,15 +93,7 @@ function MatchesTabContent() {
   );
 }
 
-function ProfileTabContent() {
-  return (
-    <View style={styles.center}>
-      <Text style={styles.placeholderTitle}>Profile Screen</Text>
-      <Text>This is a placeholder for the user’s profile.</Text>
-    </View>
-  );
-}
-
+// ----------- Requests Tab Content -----------
 function RequestsTabContent() {
   return (
     <View style={styles.center}>
@@ -96,6 +103,10 @@ function RequestsTabContent() {
   );
 }
 
+/* ---------------------------------------------------------------------------
+    3) The Main Screen with a custom bottom bar that conditionally renders 
+       the content based on activeTab. Now, profile: <ProfileScreen />
+--------------------------------------------------------------------------- */
 export default function HomeScreenWithCustomNav() {
   const [activeTab, setActiveTab] = useState("home");
 
@@ -107,8 +118,10 @@ export default function HomeScreenWithCustomNav() {
     case "matches":
       mainContent = <MatchesTabContent />;
       break;
+    // Notice: We removed the old ProfileTabContent. 
+    // We now use the separate ProfileScreen component:
     case "profile":
-      mainContent = <ProfileTabContent />;
+      mainContent = <ProfileScreen />;
       break;
     case "requests":
       mainContent = <RequestsTabContent />;
@@ -141,7 +154,7 @@ export default function HomeScreenWithCustomNav() {
           <Text
             style={[
               styles.bottomBarText,
-              activeTab === "home" && styles.moreBoldText, // 900 weight if active
+              activeTab === "home" && styles.moreBoldText,
             ]}
           >
             Home
@@ -248,6 +261,9 @@ export default function HomeScreenWithCustomNav() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// 4) Styles
+// ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
   fullContainer: {
     flex: 1,
@@ -257,17 +273,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  /* 
-   * Lighter Gray Bottom Bar
-   * #eee background
-   * #ddd for active button
-   */
+  /* Bottom bar in light grayish style or white */
   bottomBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
     paddingVertical: 10,
-    backgroundColor: "#eee",
+    backgroundColor: "#fff",
     borderTopColor: "#ccc",
     borderTopWidth: 1,
   },
@@ -278,10 +290,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginHorizontal: 4,
     borderRadius: 25,
-    backgroundColor: "transparent",
+    backgroundColor: "#f9f9f9",
   },
   bottomBarButtonActive: {
-    backgroundColor: "#ddd",
+    backgroundColor: "#f2f2f2",
   },
   bottomBarText: {
     fontSize: 14,
@@ -289,6 +301,7 @@ const styles = StyleSheet.create({
     color: "#333",
     paddingVertical: 4,
   },
+  /* Extra bold text on active tab */
   moreBoldText: {
     fontWeight: "900",
   },
@@ -300,7 +313,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 0,
   },
 
-  // Original Home content / placeholders
+  // --- Home Tab / Others (unchanged) ---
   container: {
     flex: 1,
     backgroundColor: "#f3f6ff",
@@ -371,6 +384,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#777",
   },
+
+  // Center placeholders for other screens
   center: {
     flex: 1,
     alignItems: "center",

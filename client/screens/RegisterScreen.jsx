@@ -12,26 +12,32 @@ import { theme } from "../core/theme";
 import { emailValidator } from "../helpers/emailValidator";
 import { passwordValidator } from "../helpers/passwordValidator";
 import { nameValidator } from "../helpers/nameValidator";
-import { FirebaseAuth } from "../../firebaseConfig";
+import { FirebaseAuth, FirestoreDB } from "../../firebaseConfig"; // Ensure FirestoreDB is correctly imported
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore"; // Firestore imports
 
 export default function RegisterScreen({ navigation }) {
-  const [name, setName] = useState({ value: "", error: "" });
+  const [firstName, setFirstName] = useState({ value: "", error: "" });
+  const [familyName, setFamilyName] = useState({ value: "", error: "" });
   const [email, setEmail] = useState({ value: "", error: "" });
   const [password, setPassword] = useState({ value: "", error: "" });
 
   const onSignUpPressed = async () => {
-    const nameError = nameValidator(name.value);
+    const firstNameError = nameValidator(firstName.value);
+    const familyNameError = nameValidator(familyName.value);
     const emailError = emailValidator(email.value);
     const passwordError = passwordValidator(password.value);
-    if (nameError || emailError || passwordError) {
-      setName({ ...name, error: nameError });
+
+    if (firstNameError || familyNameError || emailError || passwordError) {
+      setFirstName({ ...firstName, error: firstNameError });
+      setFamilyName({ ...familyName, error: familyNameError });
       setEmail({ ...email, error: emailError });
       setPassword({ ...password, error: passwordError });
       return;
     }
 
     try {
+      // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(
         FirebaseAuth,
         email.value,
@@ -40,7 +46,16 @@ export default function RegisterScreen({ navigation }) {
       const user = userCredential.user;
 
       // Update the user's profile with the display name
-      await updateProfile(user, { displayName: name.value });
+      await updateProfile(user, { displayName: `${firstName.value} ${familyName.value}` });
+
+      // Save the user's data in Firestore
+      const userDocRef = doc(FirestoreDB, "users", user.uid); // Use user's UID as the document ID
+      await setDoc(userDocRef, {
+        firstName: firstName.value,
+        familyName: familyName.value,
+        email: email.value,
+        uid: user.uid,
+      });
 
       // Navigate to HomeScreen upon successful registration
       navigation.reset({
@@ -56,14 +71,22 @@ export default function RegisterScreen({ navigation }) {
     <Background>
       <BackButton goBack={navigation.goBack} />
       <Logo />
-      <Header>Welcome.</Header>
+      <Header>Welcome</Header>
       <TextInput
-        label="Name"
+        label="First Name"
         returnKeyType="next"
-        value={name.value}
-        onChangeText={(text) => setName({ value: text, error: "" })}
-        error={!!name.error}
-        errorText={name.error}
+        value={firstName.value}
+        onChangeText={(text) => setFirstName({ value: text, error: "" })}
+        error={!!firstName.error}
+        errorText={firstName.error}
+      />
+      <TextInput
+        label="Family Name"
+        returnKeyType="next"
+        value={familyName.value}
+        onChangeText={(text) => setFamilyName({ value: text, error: "" })}
+        error={!!familyName.error}
+        errorText={familyName.error}
       />
       <TextInput
         label="Email"

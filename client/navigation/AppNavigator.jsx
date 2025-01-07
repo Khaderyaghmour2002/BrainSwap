@@ -7,6 +7,7 @@ import ResetPasswordScreen from "../screens/ResetPasswordScreen";
 import ProfileMakerScreen from "../screens/ProfileMakerScreen"; 
 import ProfileMakerScreen1 from "../screens/ProfileMakerScreen1"; 
 import HomeScreen from "../screens/HomeScreen";
+import ProfileScreen from "../screens/ProfileScreen";
 
 const Stack = createStackNavigator();
 
@@ -20,6 +21,7 @@ export default function AppNavigator() {
       <Stack.Screen name="ProfileMakerScreen" component={ProfileMakerScreen} />
       <Stack.Screen name="ProfileMakerScreen1" component={ProfileMakerScreen1} />
       <Stack.Screen name="HomeScreen" component={HomeScreen} />
+      <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     </Stack.Navigator>
   );
 }
