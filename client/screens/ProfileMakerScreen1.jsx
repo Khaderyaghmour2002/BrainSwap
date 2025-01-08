@@ -11,7 +11,7 @@ import {
 // If using Expo, replace with: import { LinearGradient } from 'expo-linear-gradient';
 import { LinearGradient } from "expo-linear-gradient";
 import { doc, setDoc } from "firebase/firestore";
-import { FirebaseAuth, FirebaseFirestore } from "../../firebaseConfig"; 
+import { FirebaseAuth, FirestoreDB } from "../../firebaseConfig"; 
 
 export default function SkillsToTeachScreen({ navigation }) {
   const predefinedSkills = [
@@ -47,12 +47,12 @@ export default function SkillsToTeachScreen({ navigation }) {
       }
   
       // reference to the user’s doc in Firestore (assuming "users" collection)
-      const userDocRef = doc(FirebaseFirestore, "users", currentUser.uid);
+      const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
   
       // Save or merge the selected skills into that doc
       await setDoc(
         userDocRef, 
-        { skillsToTeach: selectedSkills },  // field name in Firestore
+        { skillsToLearn: selectedSkills },  // field name in Firestore
         { merge: true }                     // merges instead of overwriting entire doc
       );
   

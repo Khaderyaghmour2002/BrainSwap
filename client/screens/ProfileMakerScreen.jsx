@@ -10,8 +10,9 @@ import {
 } from "react-native";
 // If using Expo, replace with: import { LinearGradient } from 'expo-linear-gradient';
 import { LinearGradient } from "expo-linear-gradient";
-import { doc, setDoc } from "firebase/firestore";
-import { FirebaseAuth, FirebaseFirestore } from "../../firebaseConfig"; 
+import { FirebaseAuth, FirestoreDB } from "../../firebaseConfig"; // Import FirestoreDB
+import { doc, setDoc } from "firebase/firestore"; // Firestore imports
+
 
 export default function SkillsToTeachScreen({ navigation }) {
   const predefinedSkills = [
@@ -47,12 +48,12 @@ export default function SkillsToTeachScreen({ navigation }) {
       }
   
       // reference to the user’s doc in Firestore (assuming "users" collection)
-      const userDocRef = doc(FirebaseFirestore, "users", currentUser.uid);
+      const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
   
       // Save or merge the selected skills into that doc
       await setDoc(
         userDocRef, 
-        { skillsToLearn: selectedSkills },  // field name in Firestore
+        { skillsToTeach: selectedSkills },  // field name in Firestore
         { merge: true }                     // merges instead of overwriting entire doc
       );
   
@@ -90,7 +91,7 @@ export default function SkillsToTeachScreen({ navigation }) {
       style={styles.gradientContainer}
     >
       <View style={styles.header}>
-        <Text style={styles.title}>What skills you want to learn?</Text>
+        <Text style={styles.title}>What skills can you teach?</Text>
         <Text style={styles.subtitle}>Tap to select your skills</Text>
       </View>
 
@@ -152,7 +153,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontSize: 25,
+    fontSize: 26,
     fontWeight: "700",
     color: "#2b3a67",
     textAlign: "center",

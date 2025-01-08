@@ -12,7 +12,7 @@ import { theme } from "../core/theme";
 import { emailValidator } from "../helpers/emailValidator";
 import { passwordValidator } from "../helpers/passwordValidator";
 import { nameValidator } from "../helpers/nameValidator";
-import { FirebaseAuth, FirestoreDB } from "../../firebaseConfig"; // Ensure FirestoreDB is correctly imported
+import { FirebaseAuth, FirestoreDB } from "../../firebaseConfig"; // Import FirestoreDB
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore"; // Firestore imports
 
@@ -27,7 +27,7 @@ export default function RegisterScreen({ navigation }) {
     const familyNameError = nameValidator(familyName.value);
     const emailError = emailValidator(email.value);
     const passwordError = passwordValidator(password.value);
-
+  
     if (firstNameError || familyNameError || emailError || passwordError) {
       setFirstName({ ...firstName, error: firstNameError });
       setFamilyName({ ...familyName, error: familyNameError });
@@ -35,37 +35,37 @@ export default function RegisterScreen({ navigation }) {
       setPassword({ ...password, error: passwordError });
       return;
     }
-
+  
     try {
-      // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(
         FirebaseAuth,
         email.value,
         password.value
       );
       const user = userCredential.user;
-
-      // Update the user's profile with the display name
-      await updateProfile(user, { displayName: `${firstName.value} ${familyName.value}` });
-
-      // Save the user's data in Firestore
-      const userDocRef = doc(FirestoreDB, "users", user.uid); // Use user's UID as the document ID
+  
+      
+      await updateProfile(user, {
+        displayName: `${firstName.value} ${familyName.value}`,
+      });
+  
+      const userDocRef = doc(FirestoreDB, "users", user.uid); 
       await setDoc(userDocRef, {
         firstName: firstName.value,
         familyName: familyName.value,
-        email: email.value,
-        uid: user.uid,
-      });
-
-      // Navigate to HomeScreen upon successful registration
+        email: email.value
+            });
+  
       navigation.reset({
         index: 0,
-        routes: [{ name: "HomeScreen" }],
+        routes: [{ name: "PhotoUploadScreen" }],
       });
     } catch (error) {
+     
       Alert.alert("Registration Failed", error.message);
     }
   };
+  
 
   return (
     <Background>

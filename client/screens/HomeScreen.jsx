@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState,useEffect } from "react";
 import {
   View,
   Text,
@@ -21,8 +21,12 @@ const { width } = Dimensions.get("window");
 */
 
 // ----------- Home Tab Content -----------
+import { doc, getDoc } from "firebase/firestore"; // Firestore imports
+import { FirebaseAuth, FirestoreDB } from "../../firebaseConfig"; // Import Firebase instances
+
 function HomeTabContent() {
-  const userName = "Alice";
+  const [userName, setUserName] = useState("User"); // Default name is "User"
+  const [loading, setLoading] = useState(true); // Loading state for fetching user name
   const upcomingSessions = [
     { date: "Oct 14", title: "Teaching: French Basics" },
     { date: "Oct 20", title: "Learning: Advanced Guitar" },
@@ -31,6 +35,42 @@ function HomeTabContent() {
     { name: "John", skill: "Machine Learning" },
     { name: "Maria", skill: "Graphic Design" },
   ];
+
+  useEffect(() => {
+    const fetchUserName = async () => {
+      try {
+        const currentUser = FirebaseAuth.currentUser;
+
+        if (currentUser) {
+          // Fetch the user's name from Firestore
+          const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            setUserName(userData.firstName || currentUser.displayName || "User");
+          } else {
+            // Fallback to Firebase Auth displayName
+            setUserName(currentUser.displayName || "User");
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching user name:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserName();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
@@ -55,7 +95,7 @@ function HomeTabContent() {
         )}
       </View>
 
-      {/* Recommended Mentors or People */}
+      {/* Recommended Mentors Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Recommended Mentors</Text>
         {recommendedMentors.length === 0 ? (
@@ -72,6 +112,7 @@ function HomeTabContent() {
     </ScrollView>
   );
 }
+
 
 // ----------- Chat Tab Content -----------
 function ChatTabContent() {
