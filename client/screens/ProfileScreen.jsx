@@ -1,23 +1,63 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   ScrollView,
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
-import { LinearGradient } from 'expo-linear-gradient';
+import { LinearGradient } from "expo-linear-gradient";
+import { FirebaseAuth, FirestoreDB } from "../../firebaseConfig"; // Import Firebase instances
+import { doc, getDoc } from "firebase/firestore";
 
 export default function ProfileScreen() {
-  const user = {
-    name: "Alice",
-    bio: "Passionate guitarist and French teacher. Always excited to learn something new!",
-    skillPoints: 125,
-    location: "San Francisco, CA",
-    skillsToTeach: ["Guitar", "French", "Cooking"],
-    skillsToLearn: ["Digital Marketing", "Piano"],
-  };
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const currentUser = FirebaseAuth.currentUser;
+        if (currentUser) {
+          const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (userDocSnap.exists()) {
+            setUser(userDocSnap.data());
+          } else {
+            console.error("No such user data found in Firestore!");
+          }
+        } else {
+          console.error("No user is currently logged in.");
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.loaderContainer}>
+        <ActivityIndicator size="large" color="#6a11cb" />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorMessage}>Failed to load user data.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: "#f5f7fa" }}>
@@ -31,15 +71,22 @@ export default function ProfileScreen() {
         {/* Avatar + Name + Bio */}
         <View style={styles.profileAvatarContainer}>
           <View style={styles.avatarBackground}>
-            <Ionicons
-              name="person-circle-outline"
-              size={100}
-              color="#fff"
-              style={styles.profileAvatarIcon}
-            />
+            {user.photoUrl ? (
+              <Image
+                source={{ uri: user.photoUrl }}
+                style={styles.profileAvatarImage}
+              />
+            ) : (
+              <Ionicons
+                name="person-circle-outline"
+                size={100}
+                color="#fff"
+                style={styles.profileAvatarIcon}
+              />
+            )}
           </View>
-          <Text style={styles.profileName}>{user.name}</Text>
-          <Text style={styles.profileBio}>{user.bio}</Text>
+          <Text style={styles.profileName}>{user.firstName || "Unknown User"}</Text>
+          <Text style={styles.profileBio}>{user.bio || "No bio available."}</Text>
         </View>
 
         {/* Stats Section */}
@@ -47,12 +94,16 @@ export default function ProfileScreen() {
           <View style={styles.profileStatsRow}>
             <View style={styles.profileStatItem}>
               <Ionicons name="ribbon-outline" size={22} color="#4caf50" />
-              <Text style={styles.profileStatValue}>{user.skillPoints}</Text>
+              <Text style={styles.profileStatValue}>
+                {user.skillPoints || 0}
+              </Text>
               <Text style={styles.profileStatLabel}>Skill Points</Text>
             </View>
             <View style={styles.profileStatItem}>
               <Ionicons name="location-outline" size={22} color="#4caf50" />
-              <Text style={styles.profileStatValue}>{user.location}</Text>
+              <Text style={styles.profileStatValue}>
+                {user.location || "Unknown"}
+              </Text>
               <Text style={styles.profileStatLabel}>Location</Text>
             </View>
           </View>
@@ -62,21 +113,21 @@ export default function ProfileScreen() {
         <View style={styles.skillsSection}>
           <Text style={styles.sectionTitle}>Skills to Teach</Text>
           <View style={styles.skillsPillContainer}>
-            {user.skillsToTeach.map((skill, index) => (
+            {user.skillsToTeach?.map((skill, index) => (
               <View key={index} style={styles.skillPill}>
                 <Text style={styles.skillPillText}>{skill}</Text>
               </View>
-            ))}
+            )) || <Text>No skills added yet.</Text>}
           </View>
         </View>
         <View style={styles.skillsSection}>
           <Text style={styles.sectionTitle}>Skills to Learn</Text>
           <View style={styles.skillsPillContainer}>
-            {user.skillsToLearn.map((skill, index) => (
+            {user.skillsToLearn?.map((skill, index) => (
               <View key={index} style={styles.skillPill}>
                 <Text style={styles.skillPillText}>{skill}</Text>
               </View>
-            ))}
+            )) || <Text>No skills added yet.</Text>}
           </View>
         </View>
 
@@ -93,23 +144,6 @@ export default function ProfileScreen() {
               <Text style={styles.badgeText}>100 Skill Points</Text>
             </View>
           </ScrollView>
-        </View>
-
-        {/* Reviews Section */}
-        <View style={styles.reviewsSection}>
-          <Text style={styles.sectionTitle}>Reviews</Text>
-          <View style={styles.reviewItem}>
-            <Text style={styles.reviewerName}>John</Text>
-            <Text style={styles.reviewText}>
-              "Alice was a great mentor! Learned a lot about French basics."
-            </Text>
-          </View>
-          <View style={styles.reviewItem}>
-            <Text style={styles.reviewerName}>Maria</Text>
-            <Text style={styles.reviewText}>
-              "Super helpful and patient. Guitar lessons were fun!"
-            </Text>
-          </View>
         </View>
 
         {/* Buttons / Profile Actions */}
@@ -292,5 +326,25 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  // Other styles remain unchanged
+  loaderContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: "red",
+  },
+  profileAvatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
 });
