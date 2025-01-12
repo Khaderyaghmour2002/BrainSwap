@@ -12,7 +12,7 @@ import { theme } from "../core/theme";
 import { emailValidator } from "../helpers/emailValidator";
 import { passwordValidator } from "../helpers/passwordValidator";
 import { nameValidator } from "../helpers/nameValidator";
-import { FirebaseAuth, FirestoreDB } from "../../firebaseConfig"; // Import FirestoreDB
+import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig"; // Import FirestoreDB
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore"; // Firestore imports
 

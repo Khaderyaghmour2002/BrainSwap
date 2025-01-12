@@ -11,7 +11,7 @@ import BackButton from "../components/Navigation/BackButton";
 import { theme } from "../core/theme";
 import { emailValidator } from "../helpers/emailValidator";
 import { passwordValidator } from "../helpers/passwordValidator";
-import { FirebaseAuth } from "../../firebaseConfig";
+import { FirebaseAuth } from "../../server/firebaseConfig";
 import { signInWithEmailAndPassword } from "firebase/auth";
 
 export default function LoginScreen({ navigation }) {

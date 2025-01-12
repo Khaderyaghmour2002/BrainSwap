@@ -22,7 +22,7 @@ const { width } = Dimensions.get("window");
 
 // ----------- Home Tab Content -----------
 import { doc, getDoc } from "firebase/firestore"; // Firestore imports
-import { FirebaseAuth, FirestoreDB } from "../../firebaseConfig"; // Import Firebase instances
+import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig"; // Import Firebase instances
 
 function HomeTabContent() {
   const [userName, setUserName] = useState("User"); // Default name is "User"

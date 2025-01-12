@@ -11,7 +11,7 @@ import {
 // If using Expo, replace with: import { LinearGradient } from 'expo-linear-gradient';
 import { LinearGradient } from "expo-linear-gradient";
 import { doc, setDoc } from "firebase/firestore";
-import { FirebaseAuth, FirestoreDB } from "../../firebaseConfig"; 
+import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig"; 
 
 export default function SkillsToTeachScreen({ navigation }) {
   const predefinedSkills = [

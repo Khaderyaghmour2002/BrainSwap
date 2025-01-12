@@ -10,7 +10,7 @@ import {
 } from "react-native";
 // If using Expo, replace with: import { LinearGradient } from 'expo-linear-gradient';
 import { LinearGradient } from "expo-linear-gradient";
-import { FirebaseAuth, FirestoreDB } from "../../firebaseConfig"; // Import FirestoreDB
+import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig"; // Import FirestoreDB
 import { doc, setDoc } from "firebase/firestore"; // Firestore imports
 
 
@@ -219,8 +219,8 @@ const styles = StyleSheet.create({
     marginLeft:65,
     marginTop:30,
 
-    bottom: 10,          // how far from bottom
-    alignSelf: "center", // center horizontally
+    bottom: 10,         
+    alignSelf: "center", 
     backgroundColor: "#4caf50",
     borderRadius: 25,
     paddingVertical: 14,

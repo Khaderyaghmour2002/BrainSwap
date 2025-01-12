@@ -1,18 +1,28 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Image, Alert } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  Alert,
+} from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { FirebaseAuth, FirestoreDB } from "../../firebaseConfig"; // Import FirestoreDB
-//import { doc, setDoc } from "firebase/firestore"; // Firestore imports
+import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
 import { doc, updateDoc } from "firebase/firestore";
+import Ionicons from "react-native-vector-icons/Ionicons";
 
 export default function PhotoUploadScreen({ navigation }) {
   const [selectedImage, setSelectedImage] = useState(null);
 
-  const pickImage = async () => {
+  const pickImageFromLibrary = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permissionResult.granted) {
-      Alert.alert("Permission required", "You need to grant permission to access your photo library.");
+      Alert.alert(
+        "Permission required",
+        "You need to grant permission to access your photo library."
+      );
       return;
     }
 
@@ -23,11 +33,51 @@ export default function PhotoUploadScreen({ navigation }) {
     });
 
     if (!result.canceled) {
-      setSelectedImage(result.assets[0].uri); // For Expo ImagePicker
+      setSelectedImage(result.assets[0].uri);
     }
   };
 
+  const takePhotoWithCamera = async () => {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Alert.alert(
+        "Permission required",
+        "You need to grant permission to access your camera."
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setSelectedImage(result.assets[0].uri);
+    }
+  };
+
+  const choosePhotoOption = () => {
+    Alert.alert(
+      "Upload Photo",
+      "Choose an option",
+      [
+        { text: "Take Photo", onPress: takePhotoWithCamera },
+        { text: "Choose from Gallery", onPress: pickImageFromLibrary },
+        { text: "Cancel", style: "cancel" },
+      ],
+      { cancelable: true }
+    );
+  };
+
   const savePhoto = async () => {
+    if (!selectedImage) {
+      Alert.alert("No Photo Selected", "Please select a photo before saving.");
+      return;
+    }
+
     try {
       const currentUser = FirebaseAuth.currentUser;
       if (!currentUser) {
@@ -39,7 +89,7 @@ export default function PhotoUploadScreen({ navigation }) {
       await updateDoc(userDocRef, { photoUrl: selectedImage });
 
       Alert.alert("Success", "Photo uploaded successfully!");
-      navigation.replace("HomeScreen"); // Navigate to Home after saving the photo
+      navigation.replace("ProfileMakerScreen");
     } catch (error) {
       console.error("Error saving photo:", error);
       Alert.alert("Error", "Failed to upload photo. Please try again.");
@@ -48,16 +98,31 @@ export default function PhotoUploadScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Upload a Profile Photo</Text>
-      <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
+      <Text style={styles.title}>Choose a Photo</Text>
+      <Text style={styles.subtitle}>
+        On our platform, everyone has a profile photo that clearly shows their
+        face.
+      </Text>
+      <TouchableOpacity style={styles.imagePicker} onPress={choosePhotoOption}>
         {selectedImage ? (
           <Image source={{ uri: selectedImage }} style={styles.imagePreview} />
         ) : (
-          <Text style={styles.imagePickerText}>Tap to select a photo</Text>
+          <View style={styles.uploadPlaceholder}>
+            <Ionicons name="add-outline" size={40} color="#6a11cb" />
+            <Text style={styles.imagePickerText}>Upload Photo</Text>
+          </View>
         )}
       </TouchableOpacity>
-      <TouchableOpacity style={styles.saveButton} onPress={savePhoto}>
-        <Text style={styles.saveButtonText}>Save Photo</Text>
+
+      <TouchableOpacity
+        style={[
+          styles.continueButton,
+          !selectedImage && { backgroundColor: "#ccc" },
+        ]}
+        onPress={savePhoto}
+        disabled={!selectedImage}
+      >
+        <Text style={styles.continueButtonText}>Continue</Text>
       </TouchableOpacity>
     </View>
   );
@@ -67,43 +132,55 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-    backgroundColor: "#f5f5f5",
+    padding: 35,
+    backgroundColor: "#f9f9f9",
   },
   title: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "bold",
+    marginBottom: 10,
+    textAlign: "center",
+    color: "#333",
+  },
+  subtitle: {
+    fontSize: 16,
+    color: "#777",
+    textAlign: "center",
     marginBottom: 20,
   },
   imagePicker: {
     width: 150,
     height: 150,
-    borderRadius: 75,
-    borderWidth: 1,
+    borderRadius: 10,
+    borderWidth: 2,
     borderColor: "#ddd",
-    alignItems: "center",
     justifyContent: "center",
+    alignItems: "center",
     backgroundColor: "#fff",
     marginBottom: 20,
   },
+  uploadPlaceholder: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
   imagePickerText: {
     fontSize: 14,
-    color: "#666",
+    color: "#6a11cb",
+    marginTop: 10,
   },
   imagePreview: {
     width: "100%",
     height: "100%",
-    borderRadius: 75,
-  },
-  saveButton: {
-    marginTop: 20,
-    backgroundColor: "#4caf50",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
     borderRadius: 10,
   },
-  saveButtonText: {
+  continueButton: {
+    width: "80%",
+    paddingVertical: 15,
+    borderRadius: 10,
+    backgroundColor: "#4caf50",
+    alignItems: "center",
+  },
+  continueButtonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",

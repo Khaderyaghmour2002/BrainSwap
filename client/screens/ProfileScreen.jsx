@@ -3,17 +3,17 @@ import {
   ScrollView,
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   Image,
   ActivityIndicator,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
-import { FirebaseAuth, FirestoreDB } from "../../firebaseConfig"; // Import Firebase instances
+import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
 import { doc, getDoc } from "firebase/firestore";
+import styles from '../StyleSheets/ProfileScreenStyle'; 
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -65,7 +65,15 @@ export default function ProfileScreen() {
       <LinearGradient
         colors={["#6a11cb", "#2575fc"]}
         style={styles.headerCurvedBackground}
-      />
+      >
+        {/* Settings Icon */}
+        <TouchableOpacity
+          style={styles.settingsIcon}
+          onPress={() => navigation.navigate("Settings")}
+        >
+          <Ionicons name="settings-outline" size={24} color="#fff" />
+        </TouchableOpacity>
+      </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.profileContainer}>
         {/* Avatar + Name + Bio */}
@@ -86,7 +94,15 @@ export default function ProfileScreen() {
             )}
           </View>
           <Text style={styles.profileName}>{user.firstName || "Unknown User"}</Text>
-          <Text style={styles.profileBio}>{user.bio || "No bio available."}</Text>
+          <View style={styles.bioContainer}>
+            <Text style={styles.profileBio}>{user.bio || "No bio available."}</Text>
+            <TouchableOpacity
+              style={styles.editIcon}
+              onPress={() => navigation.navigate("EditBio", { bio: user.bio })}
+            >
+              <Ionicons name="pencil-outline" size={20} color="#6a11cb" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Stats Section */}
@@ -111,7 +127,19 @@ export default function ProfileScreen() {
 
         {/* Skills Section */}
         <View style={styles.skillsSection}>
-          <Text style={styles.sectionTitle}>Skills to Teach</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Skills to Teach</Text>
+            <TouchableOpacity
+              onPress={() =>
+                navigation.navigate("EditSkills", {
+                  skills: user.skillsToTeach,
+                  type: "teach",
+                })
+              }
+            >
+              <Ionicons name="pencil-outline" size={20} color="#6a11cb" />
+            </TouchableOpacity>
+          </View>
           <View style={styles.skillsPillContainer}>
             {user.skillsToTeach?.map((skill, index) => (
               <View key={index} style={styles.skillPill}>
@@ -120,8 +148,21 @@ export default function ProfileScreen() {
             )) || <Text>No skills added yet.</Text>}
           </View>
         </View>
+
         <View style={styles.skillsSection}>
-          <Text style={styles.sectionTitle}>Skills to Learn</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Skills to Learn</Text>
+            <TouchableOpacity
+              onPress={() =>
+                navigation.navigate("EditSkills", {
+                  skills: user.skillsToLearn,
+                  type: "learn",
+                })
+              }
+            >
+              <Ionicons name="pencil-outline" size={20} color="#6a11cb" />
+            </TouchableOpacity>
+          </View>
           <View style={styles.skillsPillContainer}>
             {user.skillsToLearn?.map((skill, index) => (
               <View key={index} style={styles.skillPill}>
@@ -146,16 +187,6 @@ export default function ProfileScreen() {
           </ScrollView>
         </View>
 
-        {/* Buttons / Profile Actions */}
-        <View style={styles.profileActions}>
-          <TouchableOpacity style={styles.profileActionButton}>
-            <Text style={styles.profileActionText}>Edit Profile</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.profileActionButton}>
-            <Text style={styles.profileActionText}>Settings</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Logout Button */}
         <TouchableOpacity style={styles.logoutButton}>
           <Text style={styles.logoutText}>Log Out</Text>
@@ -165,186 +196,3 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  headerCurvedBackground: {
-    position: "absolute",
-    width: "100%",
-    height: 200,
-    borderBottomLeftRadius: 100,
-    borderBottomRightRadius: 100,
-  },
-
-  profileContainer: {
-    paddingTop: 140,
-    paddingBottom: 40,
-    alignItems: "center",
-  },
-
-  profileAvatarContainer: {
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  avatarBackground: {
-    backgroundColor: "#fff",
-    borderRadius: 50,
-    padding: 8,
-    elevation: 6,
-    shadowColor: "#000",
-  },
-  profileName: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 4,
-  },
-  profileBio: {
-    fontSize: 14,
-    color: "#777",
-    textAlign: "center",
-    marginHorizontal: 20,
-    marginBottom: 10,
-  },
-
-  profileStatsCard: {
-    backgroundColor: "#fff",
-    marginHorizontal: 20,
-    marginBottom: 20,
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    width: "90%",
-    elevation: 2,
-  },
-  profileStatsRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-  },
-  profileStatItem: {
-    alignItems: "center",
-  },
-  profileStatValue: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#333",
-    marginTop: 4,
-  },
-  profileStatLabel: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 2,
-  },
-
-  skillsSection: {
-    marginVertical: 10,
-    padding: 15,
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    width: "90%",
-  },
-  skillsPillContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: 8,
-  },
-  skillPill: {
-    backgroundColor: "#e0f7fa",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  skillPillText: {
-    fontSize: 14,
-    color: "#00796b",
-  },
-
-  badgesSection: {
-    marginVertical: 10,
-    padding: 15,
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    width: "90%",
-  },
-  badge: {
-    alignItems: "center",
-    marginRight: 10,
-  },
-  badgeText: {
-    marginTop: 5,
-    fontSize: 12,
-    color: "#666",
-  },
-
-  reviewsSection: {
-    marginVertical: 10,
-    padding: 15,
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    width: "90%",
-  },
-  reviewItem: {
-    marginBottom: 10,
-  },
-  reviewerName: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  reviewText: {
-    fontSize: 12,
-    color: "#555",
-  },
-
-  profileActions: {
-    flexDirection: "row",
-    marginTop: 10,
-  },
-  profileActionButton: {
-    flex: 1,
-    backgroundColor: "#6a11cb",
-    paddingVertical: 12,
-    borderRadius: 20,
-    alignItems: "center",
-    marginHorizontal: 5,
-  },
-  profileActionText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-
-  logoutButton: {
-    marginTop: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 40,
-    backgroundColor: "#d32f2f",
-    borderRadius: 20,
-    alignItems: "center",
-  },
-  logoutText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  // Other styles remain unchanged
-  loaderContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  errorMessage: {
-    fontSize: 16,
-    color: "red",
-  },
-  profileAvatarImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-});
