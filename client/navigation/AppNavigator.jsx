@@ -9,6 +9,11 @@ import ProfileMakerScreen1 from "../screens/ProfileMakerScreen1";
 import HomeScreen from "../screens/HomeScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import PhotoUploadScreen from "../screens/PhotoUploadScreen";
+import WelcomeScreen from "../screens/WelcomeScreen";
+import BioScreen from "../screens/BioScreen";
+import LanguagePickerScreen from "../screens/LanguagePickerScreen";
+import LocationPickerScreen from "../screens/LocationPickerScreen";
+
 
 const Stack = createStackNavigator();
 
@@ -24,6 +29,11 @@ export default function AppNavigator() {
       <Stack.Screen name="HomeScreen" component={HomeScreen} />
       <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
       <Stack.Screen name="PhotoUploadScreen" component={PhotoUploadScreen} />
+      <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} />
+      <Stack.Screen name="BioScreen" component={BioScreen} />
+      <Stack.Screen name="LanguagePickerScreen" component={LanguagePickerScreen} />
+      <Stack.Screen name="LocationPickerScreen" component={LocationPickerScreen} />
+
     </Stack.Navigator>
   );
 }

@@ -77,7 +77,7 @@ function HomeTabContent() {
       {/* Greeting / Header */}
       <View style={styles.header}>
         <Text style={styles.greeting}>Hello, {userName}!</Text>
-        <Text style={styles.subGreeting}>Welcome back to SkillShare</Text>
+        <Text style={styles.subGreeting}>Welcome back to Brain Swap</Text>
       </View>
 
       {/* Upcoming Sessions Section */}
@@ -159,8 +159,7 @@ export default function HomeScreenWithCustomNav() {
     case "matches":
       mainContent = <MatchesTabContent />;
       break;
-    // Notice: We removed the old ProfileTabContent. 
-    // We now use the separate ProfileScreen component:
+    
     case "profile":
       mainContent = <ProfileScreen />;
       break;

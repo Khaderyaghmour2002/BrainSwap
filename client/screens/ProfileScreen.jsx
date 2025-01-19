@@ -190,6 +190,7 @@ export default function ProfileScreen({ navigation }) {
         {/* Logout Button */}
         <TouchableOpacity style={styles.logoutButton}>
           <Text style={styles.logoutText}>Log Out</Text>
+          
         </TouchableOpacity>
       </ScrollView>
     </View>

@@ -57,7 +57,7 @@ export default function SkillsToTeachScreen({ navigation }) {
       );
   
       // Then navigate or do any success action
-      navigation.replace("HomeScreen");
+      navigation.replace("BioScreen");
     } catch (error) {
       console.error("Error saving skills to Firestore:", error);
       Alert.alert("Error", "Unable to save skills. Please try again.");

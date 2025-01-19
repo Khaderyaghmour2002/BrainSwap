@@ -89,7 +89,7 @@ export default function PhotoUploadScreen({ navigation }) {
       await updateDoc(userDocRef, { photoUrl: selectedImage });
 
       Alert.alert("Success", "Photo uploaded successfully!");
-      navigation.replace("ProfileMakerScreen");
+      navigation.replace("WelcomeScreen");
     } catch (error) {
       console.error("Error saving photo:", error);
       Alert.alert("Error", "Failed to upload photo. Please try again.");
@@ -138,6 +138,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: "bold",
+    marginTop:15,
     marginBottom: 10,
     textAlign: "center",
     color: "#333",
