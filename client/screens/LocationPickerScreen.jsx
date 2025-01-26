@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
+import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
+import { doc, updateDoc } from "firebase/firestore";
 
 export default function LocationPickerScreen({ navigation }) {
   const [region, setRegion] = useState({
@@ -96,16 +98,38 @@ export default function LocationPickerScreen({ navigation }) {
     }
   };
 
-  const saveLocation = () => {
+  const saveLocation = async () => {
     if (!selectedLocation) {
       Alert.alert("No Location Selected", "Please select a location first.");
       return;
     }
-    Alert.alert(
-      "Location Saved",
-      `Your location: ${selectedLocation.name}, ${selectedLocation.country}`
-    );
-    navigation.goBack();
+
+    try {
+      const currentUser = FirebaseAuth.currentUser;
+
+      if (!currentUser) {
+        Alert.alert("Error", "No user is logged in.");
+        return;
+      }
+
+      const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
+
+      // Save city and country to Firestore
+      await updateDoc(userDocRef, {
+        city: selectedLocation.name,
+        country: selectedLocation.country,
+      });
+
+      Alert.alert(
+        "Location Saved",
+        `Your location: ${selectedLocation.name}, ${selectedLocation.country} has been saved!`
+      );
+
+      navigation.navigate("ProfileMakerScreen");
+    } catch (error) {
+      console.error("Error saving location:", error);
+      Alert.alert("Error", "Failed to save location. Please try again.");
+    }
   };
 
   const handleSuggestionPress = (location) => {
@@ -125,7 +149,6 @@ export default function LocationPickerScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Header Section */}
       <View style={styles.header}>
         <Text style={styles.headerText}>
           Please select your location to proceed
@@ -189,19 +212,20 @@ export default function LocationPickerScreen({ navigation }) {
   );
 }
 
+
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f9f9f9",
   },
   header: {
-    
     padding: 20,
     backgroundColor: "#4CAF50",
     alignItems: "center",
   },
   headerText: {
-    marginTop: 303,
+    marginTop: 30,
     color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
@@ -253,7 +277,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#4CAF50",
     padding: 15,
     borderRadius: 5,
-    margin: 10,
+    margin: 20,
     alignItems: "center",
   },
   saveButtonText: {

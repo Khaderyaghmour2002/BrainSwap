@@ -6,14 +6,18 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
-import { doc, getDoc } from "firebase/firestore";
-import styles from '../StyleSheets/ProfileScreenStyle'; 
+import * as ImagePicker from "expo-image-picker";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import styles from "../StyleSheets/ProfileScreenStyle";
 
 export default function ProfileScreen({ navigation }) {
+  const [selectedImage, setSelectedImage] = useState(null);
+
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -42,6 +46,84 @@ export default function ProfileScreen({ navigation }) {
 
     fetchUserData();
   }, []);
+  const choosePhotoOption = () => {
+    Alert.alert(
+      "Upload Photo",
+      "Choose an option",
+      [
+        { text: "Take Photo", onPress: takePhotoWithCamera },
+        { text: "Choose from Gallery", onPress: pickImageFromLibrary },
+        { text: "Cancel", style: "cancel" },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const pickImageFromLibrary = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Alert.alert(
+        "Permission required",
+        "You need to grant permission to access your photo library."
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setSelectedImage(result.assets[0].uri);
+      uploadPhoto(result.assets[0].uri);
+    }
+  };
+
+  const takePhotoWithCamera = async () => {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Alert.alert(
+        "Permission required",
+        "You need to grant permission to access your camera."
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setSelectedImage(result.assets[0].uri);
+      uploadPhoto(result.assets[0].uri);
+    }
+  };
+
+  const uploadPhoto = async (uri) => {
+    try {
+      const currentUser = FirebaseAuth.currentUser;
+      if (!currentUser) {
+        Alert.alert("Error", "No user is logged in.");
+        return;
+      }
+
+      const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
+      await updateDoc(userDocRef, { photoUrl: uri });
+
+      setUser((prev) => ({ ...prev, photoUrl: uri }));
+      Alert.alert("Success", "Profile photo updated successfully!");
+    } catch (error) {
+      console.error("Error uploading photo:", error);
+      Alert.alert("Error", "Failed to upload photo. Please try again.");
+    }
+  };
+
 
   if (loading) {
     return (
@@ -79,9 +161,9 @@ export default function ProfileScreen({ navigation }) {
         {/* Avatar + Name + Bio */}
         <View style={styles.profileAvatarContainer}>
           <View style={styles.avatarBackground}>
-            {user.photoUrl ? (
+            {selectedImage || user.photoUrl ? (
               <Image
-                source={{ uri: user.photoUrl }}
+                source={{ uri: selectedImage || user.photoUrl }}
                 style={styles.profileAvatarImage}
               />
             ) : (
@@ -93,9 +175,20 @@ export default function ProfileScreen({ navigation }) {
               />
             )}
           </View>
-          <Text style={styles.profileName}>{user.firstName || "Unknown User"}</Text>
+          <TouchableOpacity
+            style={styles.editPhotoButton}
+            onPress={choosePhotoOption}
+
+          >
+            <Ionicons name="camera-outline" size={22} color="#6a11cb" />
+          </TouchableOpacity>
+          <Text style={styles.profileName}>
+            {user.firstName || "Unknown User"}
+          </Text>
           <View style={styles.bioContainer}>
-            <Text style={styles.profileBio}>{user.bio || "No bio available."}</Text>
+            <Text style={styles.profileBio}>
+              {user.bio || "No bio available."}
+            </Text>
             <TouchableOpacity
               style={styles.editIcon}
               onPress={() => navigation.navigate("EditBio", { bio: user.bio })}
@@ -118,7 +211,9 @@ export default function ProfileScreen({ navigation }) {
             <View style={styles.profileStatItem}>
               <Ionicons name="location-outline" size={22} color="#4caf50" />
               <Text style={styles.profileStatValue}>
-                {user.location || "Unknown"}
+                {user.city && user.country
+                  ? `${user.city}, ${user.country}`
+                  : "Unknown Location"}
               </Text>
               <Text style={styles.profileStatLabel}>Location</Text>
             </View>
@@ -141,11 +236,15 @@ export default function ProfileScreen({ navigation }) {
             </TouchableOpacity>
           </View>
           <View style={styles.skillsPillContainer}>
-            {user.skillsToTeach?.map((skill, index) => (
-              <View key={index} style={styles.skillPill}>
-                <Text style={styles.skillPillText}>{skill}</Text>
-              </View>
-            )) || <Text>No skills added yet.</Text>}
+            {user.skillsToTeach?.length > 0 ? (
+              user.skillsToTeach.map((skill, index) => (
+                <View key={index} style={styles.skillPill}>
+                  <Text style={styles.skillPillText}>{skill}</Text>
+                </View>
+              ))
+            ) : (
+              <Text>No skills added yet.</Text>
+            )}
           </View>
         </View>
 
@@ -164,36 +263,34 @@ export default function ProfileScreen({ navigation }) {
             </TouchableOpacity>
           </View>
           <View style={styles.skillsPillContainer}>
-            {user.skillsToLearn?.map((skill, index) => (
-              <View key={index} style={styles.skillPill}>
-                <Text style={styles.skillPillText}>{skill}</Text>
-              </View>
-            )) || <Text>No skills added yet.</Text>}
+            {user.skillsToLearn?.length > 0 ? (
+              user.skillsToLearn.map((skill, index) => (
+                <View key={index} style={styles.skillPill}>
+                  <Text style={styles.skillPillText}>{skill}</Text>
+                </View>
+              ))
+            ) : (
+              <Text>No skills added yet.</Text>
+            )}
           </View>
         </View>
 
-        {/* Achievements Section */}
-        <View style={styles.badgesSection}>
-          <Text style={styles.sectionTitle}>Achievements</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.badge}>
-              <Ionicons name="trophy-outline" size={30} color="#ffd700" />
-              <Text style={styles.badgeText}>First Lesson</Text>
-            </View>
-            <View style={styles.badge}>
-              <Ionicons name="star-outline" size={30} color="#ffd700" />
-              <Text style={styles.badgeText}>100 Skill Points</Text>
-            </View>
-          </ScrollView>
-        </View>
-
         {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutButton}>
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={async () => {
+            try {
+              await FirebaseAuth.signOut(); // Log out the current user
+              navigation.navigate("StartScreen"); // Navigate to StartScreen after logout
+            } catch (error) {
+              console.error("Error logging out:", error);
+              Alert.alert("Error", "Failed to log out. Please try again.");
+            }
+          }}
+        >
           <Text style={styles.logoutText}>Log Out</Text>
-          
         </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
-

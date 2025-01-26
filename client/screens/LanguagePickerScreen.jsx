@@ -50,7 +50,7 @@ export default function LanguagePickerScreen({ navigation }) {
       });
 
       Alert.alert("Language Saved", `You selected ${selectedLanguage.title}`);
-      navigation.navigate("ProfileMakerScreen"); // Navigate to ProfileMakerScreen after saving
+      navigation.navigate("LocationPickerScreen"); // Navigate to ProfileMakerScreen after saving
     } catch (error) {
       console.error("Error saving language:", error);
       Alert.alert("Error", "Failed to save language. Please try again.");

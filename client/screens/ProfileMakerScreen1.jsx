@@ -90,7 +90,7 @@ export default function SkillsToTeachScreen({ navigation }) {
       style={styles.gradientContainer}
     >
       <View style={styles.header}>
-        <Text style={styles.title}>What skills can you teach?</Text>
+        <Text style={styles.title}>Which skills do you want to learn?</Text>
         <Text style={styles.subtitle}>Tap to select your skills</Text>
       </View>
 

@@ -13,6 +13,7 @@ import WelcomeScreen from "../screens/WelcomeScreen";
 import BioScreen from "../screens/BioScreen";
 import LanguagePickerScreen from "../screens/LanguagePickerScreen";
 import LocationPickerScreen from "../screens/LocationPickerScreen";
+import MatchingScreen from "../screens/MatchingScreen";
 
 
 const Stack = createStackNavigator();
@@ -33,6 +34,7 @@ export default function AppNavigator() {
       <Stack.Screen name="BioScreen" component={BioScreen} />
       <Stack.Screen name="LanguagePickerScreen" component={LanguagePickerScreen} />
       <Stack.Screen name="LocationPickerScreen" component={LocationPickerScreen} />
+      <Stack.Screen name="MatchingScreen" component={MatchingScreen} />
 
     </Stack.Navigator>
   );
