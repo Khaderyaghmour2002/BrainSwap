@@ -18,10 +18,14 @@ import {
   where,
 } from "firebase/firestore";
 import { FirestoreDB, FirebaseAuth } from "../../server/firebaseConfig";
+import { useNavigation } from "@react-navigation/native";
 
-export default function MatchingScreen({ navigation }) {
+
+export default function MatchingScreen() {
+  const navigation = useNavigation();
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
+
 
   // Fetch matches from Firestore
   const fetchMatches = async () => {
@@ -87,7 +91,7 @@ export default function MatchingScreen({ navigation }) {
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() =>
-            navigation.navigate("ProfileView", {
+            navigation.navigate("ProfileViewScreen", {
               userId: item.id,
             })
           }

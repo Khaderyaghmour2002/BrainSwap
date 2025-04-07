@@ -14,6 +14,9 @@ import BioScreen from "../screens/BioScreen";
 import LanguagePickerScreen from "../screens/LanguagePickerScreen";
 import LocationPickerScreen from "../screens/LocationPickerScreen";
 import MatchingScreen from "../screens/MatchingScreen";
+import ChatScreen from "../screens/ChatScreen";
+import ProfileViewScreen from "../screens/ProfileViewScreen";
+
 
 
 const Stack = createStackNavigator();
@@ -35,6 +38,8 @@ export default function AppNavigator() {
       <Stack.Screen name="LanguagePickerScreen" component={LanguagePickerScreen} />
       <Stack.Screen name="LocationPickerScreen" component={LocationPickerScreen} />
       <Stack.Screen name="MatchingScreen" component={MatchingScreen} />
+      <Stack.Screen name="ChatScreen" component={ChatScreen} />
+      <Stack.Screen name="ProfileViewScreen" component={ProfileViewScreen} />
 
     </Stack.Navigator>
   );

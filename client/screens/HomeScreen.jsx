@@ -10,20 +10,18 @@ import {
 import Ionicons from "react-native-vector-icons/Ionicons";
 
 // 1) Import your separate Profile screen here:
-import ProfileScreen from "./ProfileScreen"; // Adjust path as needed
+import ProfileScreen from "./ProfileScreen"; 
 import MatchingScreen from "./MatchingScreen";
+import ChatScreen from "./ChatScreen";
 
 const { width } = Dimensions.get("window");
 
-/* 
-  2) Here are your individual tab content components 
-  (Home, Chat, Matches, Requests) as simple placeholders. 
-  “Profile” has been moved to ProfileScreen.js, which we imported above.
-*/
+
 
 // ----------- Home Tab Content -----------
 import { doc, getDoc } from "firebase/firestore"; // Firestore imports
 import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig"; // Import Firebase instances
+
 
 function HomeTabContent() {
   const [userName, setUserName] = useState("User"); // Default name is "User"
@@ -155,7 +153,7 @@ export default function HomeScreenWithCustomNav() {
   let mainContent;
   switch (activeTab) {
     case "chat":
-      mainContent = <ChatTabContent />;
+      mainContent = <ChatScreen />;
       break;
     case "matches":
       mainContent = <MatchingScreen />;
