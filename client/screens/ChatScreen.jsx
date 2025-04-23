@@ -1,146 +1,280 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
-  Text,
-  FlatList,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
-} from "react-native";
+  Keyboard,
+  ActivityIndicator,
+  TouchableOpacity,
+  BackHandler,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import uuid from 'react-native-uuid';
+import * as ImagePicker from 'expo-image-picker';
+import EmojiModal from 'react-native-emoji-modal';
 import {
-  collection,
-  addDoc,
+  GiftedChat,
+  Bubble,
+  Send,
+  InputToolbar,
+} from 'react-native-gifted-chat';
+import {
+  getDownloadURL,
+  ref,
+  uploadBytesResumable,
+  getStorage,
+} from 'firebase/storage';
+import {
+  doc,
+  setDoc,
+  getDoc,
   onSnapshot,
-  query,
-  orderBy,
-} from "firebase/firestore";
-import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
+} from 'firebase/firestore';
 
-export default function ChatScreen({ navigation, route }) {
-    const { recipientId, recipientName } = route?.params || {};
+import { FirebaseAuth, FirestoreDB } from '../../server/firebaseConfig';
+import { colors } from '../assets/constants';
+
+export default function Chat({ route }) {
+  const { recipientId, recipientName } = route.params;
+  const currentUser = FirebaseAuth.currentUser;
+  const chatId = [currentUser.uid, recipientId].sort().join('_');
 
   const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-
-  const currentUser = FirebaseAuth.currentUser;
- 
-
-  const chatId = [currentUser.uid, recipientId].sort().join("_");
+  const [modal, setModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    const q = query(
-      collection(FirestoreDB, "chats", chatId, "messages"),
-      orderBy("createdAt", "desc")
+    const unsubscribe = onSnapshot(doc(FirestoreDB, 'chats', chatId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setMessages(
+          data.messages.map((msg) => ({
+            ...msg,
+            createdAt: msg.createdAt.toDate(),
+            image: msg.image ?? '',
+          }))
+        );
+      }
+    });
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      Keyboard.dismiss();
+      if (modal) {
+        setModal(false);
+        return true;
+      }
+      return false;
+    });
+
+    const keyboardListener = Keyboard.addListener('keyboardDidShow', () => {
+      if (modal) setModal(false);
+    });
+
+    return () => {
+      unsubscribe();
+      backHandler.remove();
+      keyboardListener.remove();
+    };
+  }, [chatId, modal]);
+
+  const onSend = useCallback(
+    async (newMessages = []) => {
+      const docRef = doc(FirestoreDB, 'chats', chatId);
+      const docSnap = await getDoc(docRef);
+      const prevMessages = docSnap.exists()
+        ? docSnap.data().messages.map((msg) => ({
+            ...msg,
+            createdAt: msg.createdAt.toDate(),
+          }))
+        : [];
+
+      const updatedMessages = GiftedChat.append(prevMessages, newMessages);
+
+      await setDoc(
+        docRef,
+        {
+          messages: updatedMessages,
+          lastUpdated: Date.now(),
+        },
+        { merge: true }
+      );
+    },
+    [chatId]
+  );
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 1,
+      allowsEditing: true,
+    });
+
+    if (!result.canceled) {
+      await uploadImage(result.assets[0].uri);
+    }
+  };
+
+  const uploadImage = async (uri) => {
+    setUploading(true);
+    const blob = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.onload = () => resolve(xhr.response);
+      xhr.onerror = () => reject(new TypeError('Network request failed'));
+      xhr.responseType = 'blob';
+      xhr.open('GET', uri, true);
+      xhr.send(null);
+    });
+
+    const fileId = uuid.v4();
+    const fileRef = ref(getStorage(), fileId);
+    const uploadTask = uploadBytesResumable(fileRef, blob);
+
+    uploadTask.on(
+      'state_changed',
+      null,
+      (error) => {
+        console.error('Upload failed:', error);
+        setUploading(false);
+      },
+      async () => {
+        const downloadURL = await getDownloadURL(fileRef);
+        setUploading(false);
+        onSend([
+          {
+            _id: fileId,
+            createdAt: new Date(),
+            text: '',
+            image: downloadURL,
+            user: {
+              _id: currentUser.uid,
+              name: currentUser.displayName || 'User',
+              avatar: 'https://i.pravatar.cc/300',
+            },
+          },
+        ]);
+      }
     );
+  };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setMessages(data);
+  const toggleEmojiPanel = () => {
+    setModal((prev) => {
+      Keyboard.dismiss();
+      return !prev;
     });
-
-    return () => unsubscribe();
-  }, []);
-
-  const handleSend = async () => {
-    if (input.trim() === "") return;
-
-    await addDoc(collection(FirestoreDB, "chats", chatId, "messages"), {
-      text: input,
-      senderId: currentUser.uid,
-      senderName: currentUser.displayName || "User",
-      createdAt: new Date(),
-    });
-
-    setInput("");
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Chat with {recipientName}</Text>
+    <>
+      {uploading && (
+        <View style={styles.uploadingOverlay}>
+          <ActivityIndicator size="large" color={colors.teal} />
+        </View>
+      )}
 
-      <FlatList
-        data={messages}
-        inverted
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View
-            style={[
-              styles.message,
-              item.senderId === currentUser.uid
-                ? styles.myMessage
-                : styles.theirMessage,
-            ]}
-          >
-            <Text style={styles.messageText}>{item.text}</Text>
+      <GiftedChat
+        messages={messages}
+        onSend={(msgs) => onSend(msgs)}
+        user={{
+          _id: currentUser.uid,
+          name: currentUser.displayName || 'User',
+          avatar: 'https://i.pravatar.cc/300',
+        }}
+        showAvatarForEveryMessage={false}
+        showUserAvatar={false}
+        imageStyle={{ height: 212, width: 212 }}
+        renderBubble={(props) => (
+          <Bubble
+            {...props}
+            wrapperStyle={{
+              right: { backgroundColor: colors.primary },
+              left: { backgroundColor: '#eee' },
+            }}
+          />
+        )}
+        renderSend={(props) => (
+          <TouchableOpacity {...props} onPress={pickImage} style={styles.attachButton}>
+            <Ionicons name="attach-outline" size={26} color={colors.teal} />
+          </TouchableOpacity>
+        )}
+        renderInputToolbar={(props) => (
+          <View style={styles.toolbarRow}>
+            <TouchableOpacity onPress={toggleEmojiPanel} style={styles.emojiIcon}>
+              <Ionicons name="happy-outline" size={26} color={colors.teal} />
+            </TouchableOpacity>
+            <InputToolbar
+              {...props}
+              containerStyle={styles.inputToolbar}
+            />
+            <Send {...props}>
+              <View style={styles.sendButton}>
+                <Ionicons name="send" size={20} color={colors.teal} />
+              </View>
+            </Send>
           </View>
         )}
       />
 
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          value={input}
-          onChangeText={setInput}
-          placeholder="Type your message..."
+      {modal && (
+        <EmojiModal
+          onPressOutside={toggleEmojiPanel}
+          columns={6}
+          emojiSize={32}
+          onEmojiSelected={(emoji) =>
+            onSend([
+              {
+                _id: uuid.v4(),
+                createdAt: new Date(),
+                text: emoji,
+                user: {
+                  _id: currentUser.uid,
+                  name: currentUser.displayName || 'User',
+                  avatar: 'https://i.pravatar.cc/300',
+                },
+              },
+            ])
+          }
         />
-        <TouchableOpacity onPress={handleSend} style={styles.sendButton}>
-          <Text style={{ color: "white" }}>Send</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+      )}
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-    padding: 10,
+  uploadingOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 999,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  header: {
-    fontSize: 18,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  message: {
-    marginVertical: 5,
-    padding: 10,
-    borderRadius: 10,
-    maxWidth: "75%",
-  },
-  myMessage: {
-    alignSelf: "flex-end",
-    backgroundColor: "#4CAF50",
-  },
-  theirMessage: {
-    alignSelf: "flex-start",
-    backgroundColor: "#E0E0E0",
-  },
-  messageText: {
-    color: "#000",
-  },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderTopWidth: 1,
-    borderColor: "#ccc",
-    padding: 5,
-  },
-  input: {
-    flex: 1,
-    height: 40,
-    borderRadius: 20,
-    paddingHorizontal: 15,
-    backgroundColor: "#f0f0f0",
+  attachButton: {
+    padding: 8,
+    marginLeft: 8,
+    marginBottom: 6,
   },
   sendButton: {
-    backgroundColor: "#4CAF50",
-    padding: 10,
+    padding: 8,
+    marginRight: 8,
+    marginBottom: 6,
+  },
+  emojiIcon: {
+    padding: 6,
+    marginLeft: 8,
+    marginBottom: 6,
+  },
+  toolbarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  inputToolbar: {
+    flex: 1,
     borderRadius: 20,
-    marginLeft: 10,
+    borderColor: '#ccc',
+    borderWidth: 1,
+    marginHorizontal: 8,
+    marginBottom: 6,
+    paddingHorizontal: 8,
+    backgroundColor: '#f8f8f8',
   },
 });

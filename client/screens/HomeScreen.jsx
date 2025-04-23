@@ -12,7 +12,7 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 // 1) Import your separate Profile screen here:
 import ProfileScreen from "./ProfileScreen"; 
 import MatchingScreen from "./MatchingScreen";
-import ChatScreen from "./ChatScreen";
+import ChatsScreen from "./ChatsScreen";
 
 const { width } = Dimensions.get("window");
 
@@ -153,7 +153,7 @@ export default function HomeScreenWithCustomNav() {
   let mainContent;
   switch (activeTab) {
     case "chat":
-      mainContent = <ChatScreen />;
+      mainContent = <ChatsScreen />;
       break;
     case "matches":
       mainContent = <MatchingScreen />;

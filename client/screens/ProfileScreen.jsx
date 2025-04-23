@@ -11,8 +11,8 @@ import {
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
-import * as ImagePicker from "expo-image-picker";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
+import * as ImagePicker from "expo-image-picker";
 import styles from "../StyleSheets/ProfileScreenStyle";
 
 export default function ProfileScreen({ navigation }) {
