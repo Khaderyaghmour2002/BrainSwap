@@ -33,7 +33,7 @@ import { FirebaseAuth, FirestoreDB } from '../../server/firebaseConfig';
 import ContactRow from '../components/ContactRow';
 import { colors } from '../assets/constants';
 
-const Chats = ({ setUnreadCount }) => {
+const Chats = ({ setUnreadCount = () => {} }) => {
   const navigation = useNavigation();
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,48 +43,46 @@ const Chats = ({ setUnreadCount }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const currentUser = FirebaseAuth.currentUser;
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!currentUser) return;
-
-      const loadNewMessages = async () => {
+  useEffect(() => {
+    if (!currentUser) return;
+  
+    const loadNewMessages = async () => {
+      try {
         const stored = await AsyncStorage.getItem('newMessages');
         const parsed = stored ? JSON.parse(stored) : {};
         setNewMessages(parsed);
         setUnreadCount(Object.values(parsed).reduce((a, b) => a + b, 0));
-      };
-
-      const q = query(
-        collection(FirestoreDB, 'chats'),
-        where('participants', 'array-contains', currentUser.uid),
-        orderBy('lastUpdated', 'desc')
-      );
-
-      const unsubscribe = onSnapshot(q, (snapshot) => {
+      } catch (error) {
+        console.warn('Failed to load newMessages from storage:', error);
+      }
+    };
+  
+    const q = query(
+      collection(FirestoreDB, 'chats'),
+      where('participants', 'array-contains', currentUser.uid),
+      orderBy('lastUpdated', 'desc')
+    );
+  
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
         setChats(snapshot.docs);
-        setLoading(false);
-
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === 'modified') {
-            const chatId = change.doc.id;
-            const messages = change.doc.data().messages || [];
-            const latest = messages[0];
-            if (latest && latest.user._id !== currentUser.uid) {
-              setNewMessages((prev) => {
-                const updated = { ...prev, [chatId]: (prev[chatId] || 0) + 1 };
-                AsyncStorage.setItem('newMessages', JSON.stringify(updated));
-                setUnreadCount(Object.values(updated).reduce((a, b) => a + b, 0));
-                return updated;
-              });
-            }
-          }
-        });
-      });
-
-      loadNewMessages();
-      return () => unsubscribe();
-    }, [setUnreadCount])
-  );
+      } else {
+        console.log('No chats for user.');
+        setChats([]);
+      }
+      setLoading(false);
+    }, (error) => {
+      console.error('Error fetching chats:', error);
+      Alert.alert('Error', 'Unable to fetch chats. Please try again.');
+      setChats([]);
+      setLoading(false);
+    });
+  
+    loadNewMessages();
+  
+    return () => unsubscribe();
+  }, []);
+  
 
   useEffect(() => {
     const fetchConnections = async () => {
@@ -129,6 +127,8 @@ const Chats = ({ setUnreadCount }) => {
 
   const handleOnPress = (chat) => {
     const chatId = chat.id;
+    const otherUser = chat.data().userInfo?.find((u) => u.id !== currentUser.uid);
+  
     if (selectedItems.includes(chatId)) {
       selectItems(chat);
     } else {
@@ -138,12 +138,19 @@ const Chats = ({ setUnreadCount }) => {
         setUnreadCount(Object.values(updated).reduce((a, b) => a + b, 0));
         return updated;
       });
-      navigation.navigate('ChatScreen', {
-        chatId,
-        recipientName: handleChatName(chat),
+  
+      // Navigate to NewChatScreen instead of ChatScreen
+      navigation.navigate('NewChatScreen', {
+        user: {
+          id: otherUser?.id,
+          firstName: otherUser?.name,
+          photoUrl: otherUser?.photoUrl || '',
+          status: otherUser?.status || 'Available',
+        },
       });
     }
   };
+  
 
   const startNewChat = async (connection) => {
     const ids = [currentUser.uid, connection.id].sort();
@@ -193,11 +200,12 @@ const Chats = ({ setUnreadCount }) => {
 
   const handleSubtitle = (chat) => {
     const message = chat.data().messages?.[0];
-    if (!message) return 'No messages yet';
+    if (!message) return 'Tap to start chatting';
     const isMe = message.user._id === currentUser.uid;
-    const name = isMe ? 'You' : message.user.name;
+    const name = isMe ? 'You' : message.user.name || 'Someone';
     return `${name}: ${message.text?.slice(0, 20)}${message.text?.length > 20 ? '...' : ''}`;
   };
+  
 
   const handleTimestamp = (chat) => {
     const date = new Date(chat.data().lastUpdated);

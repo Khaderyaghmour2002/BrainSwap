@@ -56,14 +56,14 @@ export default function NewChatScreen({ route }) {
         }))
       : [];
 
-    const updatedMessages = GiftedChat.append(prevMessages, newMessages);
-    console.log("Trying to create/update chat with:", {
-      participants: [currentUser.uid, user.id],
-      userInfo: [
-        { id: currentUser.uid, name: currentUser.displayName || 'You' },
-        { id: user.id, name: user.firstName || 'User' },
-      ],
-    });
+    // const updatedMessages = GiftedChat.append(prevMessages, newMessages);
+    // console.log("Trying to create/update chat with:", {
+    //   participants: [currentUser.uid, user.id],
+    //   userInfo: [
+    //     { id: currentUser.uid, name: currentUser.displayName || 'You' },
+    //     { id: user.id, name: user.firstName || 'User' },
+    //   ],
+    // });
     
     await setDoc(docRef, {
       participants: [currentUser.uid, user.id],
