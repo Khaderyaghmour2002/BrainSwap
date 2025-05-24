@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Text,
   View,
@@ -13,9 +13,8 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import PropTypes from 'prop-types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import {
   collection,
   doc,
@@ -30,212 +29,164 @@ import {
 } from 'firebase/firestore';
 
 import { FirebaseAuth, FirestoreDB } from '../../server/firebaseConfig';
-import ContactRow from '../components/ContactRow';
 import { colors } from '../assets/constants';
 
-const Chats = ({ setUnreadCount = () => {} }) => {
+const ChatsScreen = ({ setUnreadCount = () => {} }) => {
   const navigation = useNavigation();
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedItems, setSelectedItems] = useState([]);
-  const [newMessages, setNewMessages] = useState({});
   const [connections, setConnections] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const currentUser = FirebaseAuth.currentUser;
+  const [userPhotos, setUserPhotos] = useState({});
 
   useEffect(() => {
     if (!currentUser) return;
-  
-    const loadNewMessages = async () => {
-      try {
-        const stored = await AsyncStorage.getItem('newMessages');
-        const parsed = stored ? JSON.parse(stored) : {};
-        setNewMessages(parsed);
-        setUnreadCount(Object.values(parsed).reduce((a, b) => a + b, 0));
-      } catch (error) {
-        console.warn('Failed to load newMessages from storage:', error);
-      }
-    };
-  
+
     const q = query(
       collection(FirestoreDB, 'chats'),
       where('participants', 'array-contains', currentUser.uid),
       orderBy('lastUpdated', 'desc')
     );
-  
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        setChats(snapshot.docs);
-      } else {
-        console.log('No chats for user.');
-        setChats([]);
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      setChats(snapshot.docs);
+      const photoUpdates = {};
+
+      for (const chat of snapshot.docs) {
+        const otherId = chat.data().participants.find(id => id !== currentUser.uid);
+        if (otherId && !userPhotos[otherId]) {
+          const userSnap = await getDoc(doc(FirestoreDB, 'users', otherId));
+          if (userSnap.exists()) {
+            photoUpdates[otherId] = userSnap.data().photoUrl;
+          }
+        }
       }
+
+      setUserPhotos(prev => ({ ...prev, ...photoUpdates }));
       setLoading(false);
     }, (error) => {
       console.error('Error fetching chats:', error);
-      Alert.alert('Error', 'Unable to fetch chats. Please try again.');
       setChats([]);
       setLoading(false);
     });
-  
-    loadNewMessages();
-  
+
     return () => unsubscribe();
   }, []);
-  
 
   useEffect(() => {
     const fetchConnections = async () => {
       if (!currentUser) return;
       try {
-        const userDocRef = doc(FirestoreDB, 'users', currentUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
-          const connectionIds = userData.connections || [];
-          if (connectionIds.length === 0) {
-            setConnections([]);
-            return;
-          }
-          const fetchedConnections = [];
-          const chunks = [];
-          const clonedIds = [...connectionIds];
-          while (clonedIds.length) chunks.push(clonedIds.splice(0, 10));
-          for (const chunk of chunks) {
-            const q = query(collection(FirestoreDB, 'users'), where('__name__', 'in', chunk));
-            const snapshot = await getDocs(q);
-            snapshot.forEach((docSnap) => {
-              if (docSnap.id !== currentUser.uid) {
-                fetchedConnections.push({ id: docSnap.id, ...docSnap.data() });
-              }
-            });
-          }
-          setConnections(fetchedConnections);
+        const userDoc = await getDoc(doc(FirestoreDB, 'users', currentUser.uid));
+        const connectionIds = userDoc.data()?.connections || [];
+
+        const connectionChunks = [];
+        while (connectionIds.length) connectionChunks.push(connectionIds.splice(0, 10));
+
+        const allConnections = [];
+        for (const chunk of connectionChunks) {
+          const q = query(collection(FirestoreDB, 'users'), where('__name__', 'in', chunk));
+          const snapshot = await getDocs(q);
+          snapshot.forEach(docSnap => {
+            if (docSnap.id !== currentUser.uid) {
+              allConnections.push({ id: docSnap.id, ...docSnap.data() });
+            }
+          });
         }
-      } catch (error) {
-        console.error('Error fetching connections:', error);
-        Alert.alert('Error', 'Failed to load connections.');
+        setConnections(allConnections);
+      } catch (err) {
+        console.error('Error loading connections:', err);
       }
     };
+
     fetchConnections();
   }, []);
 
-  const handleChatName = (chat) => {
-    const other = chat.data().userInfo?.find((u) => u.id !== currentUser.uid);
-    return other?.name || 'Chat';
+  const getChatPreview = (chat) => {
+    const lastMessage = chat.data().messages?.[0];
+    if (!lastMessage) return 'Start chatting';
+    const sender = lastMessage.user._id === currentUser.uid ? 'You' : lastMessage.user.name;
+    return `${sender}: ${lastMessage.text?.slice(0, 25)}${lastMessage.text?.length > 25 ? '...' : ''}`;
   };
 
-  const handleOnPress = (chat) => {
-    const chatId = chat.id;
-    const otherUser = chat.data().userInfo?.find((u) => u.id !== currentUser.uid);
-  
-    if (selectedItems.includes(chatId)) {
-      selectItems(chat);
-    } else {
-      setNewMessages((prev) => {
-        const updated = { ...prev, [chatId]: 0 };
-        AsyncStorage.setItem('newMessages', JSON.stringify(updated));
-        setUnreadCount(Object.values(updated).reduce((a, b) => a + b, 0));
-        return updated;
-      });
-  
-      // Navigate to NewChatScreen instead of ChatScreen
-      navigation.navigate('NewChatScreen', {
-        user: {
-          id: otherUser?.id,
-          firstName: otherUser?.name,
-          photoUrl: otherUser?.photoUrl || '',
-          status: otherUser?.status || 'Available',
-        },
-      });
-    }
-  };
-  
-
-  const startNewChat = async (connection) => {
-    const ids = [currentUser.uid, connection.id].sort();
-    const chatId = ids.join('_');
-    const chatRef = doc(FirestoreDB, 'chats', chatId);
-    await setDoc(chatRef, {
-      participants: ids,
-      userInfo: [
-        { id: currentUser.uid, name: currentUser.displayName || 'You' },
-        { id: connection.id, name: connection.firstName || 'User' },
-      ],
-      messages: [],
-      lastUpdated: Date.now(),
-    }, { merge: true });
-    setModalVisible(false);
-    navigation.navigate('ChatScreen', {
-      chatId,
-      recipientName: connection.firstName,
-    });
-  };
-
-  const handleLongPress = (chat) => {
-    selectItems(chat);
-  };
-
-  const selectItems = (chat) => {
-    const exists = selectedItems.includes(chat.id);
-    setSelectedItems(exists ? selectedItems.filter((id) => id !== chat.id) : [...selectedItems, chat.id]);
-  };
-
-  const handleDeleteChat = () => {
-    Alert.alert('Delete chat?', 'Are you sure you want to delete selected chat(s)?', [
-      {
-        text: 'Delete',
-        onPress: () => {
-          selectedItems.forEach(async (chatId) => {
-            await deleteDoc(doc(FirestoreDB, 'chats', chatId));
-          });
-          setSelectedItems([]);
-        },
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
-  const getSelected = (chat) => selectedItems.includes(chat.id);
-
-  const handleSubtitle = (chat) => {
-    const message = chat.data().messages?.[0];
-    if (!message) return 'Tap to start chatting';
-    const isMe = message.user._id === currentUser.uid;
-    const name = isMe ? 'You' : message.user.name || 'Someone';
-    return `${name}: ${message.text?.slice(0, 20)}${message.text?.length > 20 ? '...' : ''}`;
-  };
-  
-
-  const handleTimestamp = (chat) => {
+  const getTimestamp = (chat) => {
     const date = new Date(chat.data().lastUpdated);
     return date.toLocaleDateString();
   };
 
+  const startNewChat = async (contact) => {
+    const ids = [currentUser.uid, contact.id].sort();
+    const chatId = ids.join('_');
+    const chatRef = doc(FirestoreDB, 'chats', chatId);
+    const chatSnap = await getDoc(chatRef);
+
+    if (!chatSnap.exists()) {
+      await setDoc(chatRef, {
+        participants: ids,
+        userInfo: [
+          {
+            id: currentUser.uid,
+            name: currentUser.displayName || 'You',
+            photoUrl: currentUser.photoURL,
+          },
+          {
+            id: contact.id,
+            name: contact.firstName || 'User',
+            photoUrl: contact.photoUrl,
+          },
+        ],
+        messages: [],
+        lastUpdated: Date.now(),
+      });
+    }
+
+    setModalVisible(false);
+    navigation.navigate('NewChatScreen', {
+      user: {
+        id: contact.id,
+        firstName: contact.firstName,
+        photoUrl: contact.photoUrl,
+        status: contact.status || 'Available',
+      },
+    });
+  };
+
   return (
-    <Pressable style={styles.container} onPress={() => setSelectedItems([])}>
+    <Pressable style={styles.container}>
       {loading ? (
         <ActivityIndicator size="large" color={colors.teal} />
+      ) : chats.length === 0 ? (
+        <View style={styles.blankContainer}>
+          <Text>No conversations yet</Text>
+        </View>
       ) : (
         <ScrollView>
-          {chats.length === 0 ? (
-            <View style={styles.blankContainer}>
-              <Text>No conversations yet</Text>
-            </View>
-          ) : (
-            chats.map((chat) => (
-              <ContactRow
+          {chats.map(chat => {
+            const otherId = chat.data().participants.find(id => id !== currentUser.uid);
+            const other = chat.data().userInfo?.find(u => u.id === otherId);
+            return (
+              <TouchableOpacity
                 key={chat.id}
-                name={handleChatName(chat)}
-                subtitle={handleSubtitle(chat)}
-                subtitle2={handleTimestamp(chat)}
-                onPress={() => handleOnPress(chat)}
-                onLongPress={() => handleLongPress(chat)}
-                selected={getSelected(chat)}
-                newMessageCount={newMessages[chat.id] || 0}
-              />
-            ))
-          )}
+                onPress={() => navigation.navigate('NewChatScreen', {
+                  user: {
+                    id: other?.id,
+                    firstName: other?.name,
+                    photoUrl: userPhotos[otherId],
+                    status: other?.status || 'Available',
+                  },
+                })}
+                style={styles.connectionItem}
+              >
+                <Image source={{ uri: userPhotos[otherId] }} style={styles.avatar} />
+                <View>
+                  <Text style={styles.connectionName}>{other?.name || 'Chat'}</Text>
+                  <Text style={styles.statusText}>{getChatPreview(chat)}</Text>
+                </View>
+                <Text style={styles.timestamp}>{getTimestamp(chat)}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       )}
 
@@ -252,7 +203,6 @@ const Chats = ({ setUnreadCount = () => {} }) => {
             <Text style={styles.modalTitle}>Select contact</Text>
             <Text style={styles.subtitle}>{connections.length} contacts</Text>
           </View>
-          <Ionicons name="search" size={22} color="#fff" />
         </View>
 
         <FlatList
@@ -260,17 +210,8 @@ const Chats = ({ setUnreadCount = () => {} }) => {
           keyExtractor={(item) => item.id}
           style={styles.modalList}
           renderItem={({ item }) => (
-            <TouchableOpacity
-            style={styles.connectionItem}
-            onPress={() => {
-              setModalVisible(false);
-              navigation.navigate('NewChatScreen', { user: item });
-            }}
-            >
-              <Image
-                source={{ uri: item.photoUrl || 'https://i.pravatar.cc/150' }}
-                style={styles.avatar}
-              />
+            <TouchableOpacity style={styles.connectionItem} onPress={() => startNewChat(item)}>
+              <Image source={{ uri: item.photoUrl }} style={styles.avatar} />
               <View>
                 <Text style={styles.connectionName}>{item.firstName}</Text>
                 <Text style={styles.statusText}>{item.status || 'Available'}</Text>
@@ -281,10 +222,6 @@ const Chats = ({ setUnreadCount = () => {} }) => {
       </Modal>
     </Pressable>
   );
-};
-
-Chats.propTypes = {
-  setUnreadCount: PropTypes.func,
 };
 
 const styles = StyleSheet.create({
@@ -313,9 +250,7 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
   },
-  titleGroup: {
-    flex: 1,
-  },
+  titleGroup: { flex: 1 },
   modalTitle: {
     fontSize: 18,
     color: '#fff',
@@ -331,6 +266,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   connectionItem: {
+    marginTop: 30,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -353,6 +289,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
+  timestamp: {
+    marginLeft: 'auto',
+    fontSize: 11,
+    color: '#aaa',
+  },
 });
 
-export default Chats;
+export default ChatsScreen;

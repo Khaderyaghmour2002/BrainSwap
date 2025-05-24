@@ -14,12 +14,11 @@ import BioScreen from "../screens/BioScreen";
 import LanguagePickerScreen from "../screens/LanguagePickerScreen";
 import LocationPickerScreen from "../screens/LocationPickerScreen";
 import MatchingScreen from "../screens/MatchingScreen";
-import ChatScreen from "../screens/ChatScreen";
 import ChatsScreen from "../screens/ChatsScreen";
 import ChatInfoScreen from "../screens/ChatInfoScreen";
 import ProfileViewScreen from "../screens/ProfileViewScreen";
 import NewChatScreen from "../screens/NewChatScreen";
-
+import VoiceCallScreen from "../screens/VoiceCallScreen";
 
 
 
@@ -42,11 +41,11 @@ export default function AppNavigator() {
       <Stack.Screen name="LanguagePickerScreen" component={LanguagePickerScreen} />
       <Stack.Screen name="LocationPickerScreen" component={LocationPickerScreen} />
       <Stack.Screen name="MatchingScreen" component={MatchingScreen} />
-      <Stack.Screen name="ChatScreen" component={ChatScreen} />
       <Stack.Screen name="ChatsScreen" component={ChatsScreen} />
       <Stack.Screen name="ChatInfoScreen" component={ChatInfoScreen} />
       <Stack.Screen name="ProfileViewScreen" component={ProfileViewScreen} />
       <Stack.Screen name="NewChatScreen" component={NewChatScreen} />
+      <Stack.Screen name="VoiceCallScreen" component={VoiceCallScreen} />
      
 
     </Stack.Navigator>
