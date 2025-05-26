@@ -4,11 +4,13 @@
     "slug": "brainswap",
     "version": "1.0.0",
     "sdkVersion": "53.0.0",
-    //I add it temprearily to avoid the error
-      "jsEngine": "jsc",
+    "jsEngine": "jsc",
     "platforms": [
       "ios",
       "android"
-    ]
+    ],
+    "android": {
+      "package": "com.anonymous.brainswap"
+    }
   }
 }

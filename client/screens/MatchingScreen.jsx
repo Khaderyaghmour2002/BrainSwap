@@ -1,3 +1,4 @@
+// MatchingScreen.jsx (Upgraded with request-based connection logic)
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -16,60 +17,60 @@ import {
   getDocs,
   query,
   where,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { FirestoreDB, FirebaseAuth } from "../../server/firebaseConfig";
 import { useNavigation } from "@react-navigation/native";
-
 
 export default function MatchingScreen() {
   const navigation = useNavigation();
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
 
-
-  // Fetch matches from Firestore
   const fetchMatches = async () => {
     try {
       const currentUser = FirebaseAuth.currentUser;
+      if (!currentUser) return;
 
-      if (!currentUser) {
-        Alert.alert("Error", "User not logged in.");
-        return;
-      }
+      const userDoc = await getDoc(doc(FirestoreDB, "users", currentUser.uid));
+      const userData = userDoc.data();
 
-      // Fetch the current user's data using UID as document ID
-      const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
-      const userDocSnap = await getDoc(userDocRef);
-
-      if (!userDocSnap.exists()) {
-        Alert.alert("Error", "User data not found.");
-        return;
-      }
-
-      const userData = userDocSnap.data();
-
-      // Query for matches based on skills to learn
-      const usersCollection = collection(FirestoreDB, "users");
       const matchesQuery = query(
-        usersCollection,
+        collection(FirestoreDB, "users"),
         where("skillsToTeach", "array-contains-any", userData.skillsToLearn || [])
       );
 
       const querySnapshot = await getDocs(matchesQuery);
+      const fetched = querySnapshot.docs
+        .filter((doc) => doc.id !== currentUser.uid)
+        .map((doc) => ({ id: doc.id, ...doc.data() }));
 
-      const fetchedMatches = querySnapshot.docs
-        .filter((doc) => doc.id !== currentUser.uid) // Exclude the current user
-        .map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-
-      setMatches(fetchedMatches);
-    } catch (error) {
-      console.error("Error fetching matches:", error);
-      Alert.alert("Error", "Failed to fetch matches. Please try again.");
+      setMatches(fetched);
+    } catch (err) {
+      console.error("Error fetching matches:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const sendRequest = async (targetUser) => {
+    try {
+      const currentUser = FirebaseAuth.currentUser;
+      const requestRef = doc(FirestoreDB, "requests", `${currentUser.uid}_${targetUser.id}`);
+
+      await setDoc(requestRef, {
+        from: currentUser.uid,
+        to: targetUser.id,
+        status: "pending",
+        timestamp: serverTimestamp(),
+      });
+
+      Alert.alert("Request Sent", `You have sent a request to ${targetUser.firstName}.`);
+    } catch (err) {
+      console.error("Failed to send request:", err);
+      Alert.alert("Error", "Could not send request. Try again.");
     }
   };
 
@@ -79,25 +80,26 @@ export default function MatchingScreen() {
 
   const renderMatchItem = ({ item }) => (
     <View style={styles.matchCard}>
-      <Image
-        source={{ uri: item.photoUrl || "https://via.placeholder.com/100" }}
-        style={styles.profileImage}
-      />
+      <Image source={{ uri: item.photoUrl }} style={styles.profileImage} />
       <View style={styles.matchDetails}>
-        <Text style={styles.name}>{item.firstName || "Unknown User"}</Text>
+        <Text style={styles.name}>{item.firstName}</Text>
         <Text style={styles.matchSkills}>
           Skills to Teach: {item.skillsToTeach.join(", ")}
         </Text>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() =>
-            navigation.navigate("ProfileViewScreen", {
-              userId: item.id,
-            })
-          }
-        >
-          <Text style={styles.actionButtonText}>View Profile</Text>
-        </TouchableOpacity>
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={styles.viewButton}
+            onPress={() => navigation.navigate("ProfileViewScreen", { userId: item.id })}
+          >
+            <Text style={styles.actionText}>View Profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.requestButton}
+            onPress={() => sendRequest(item)}
+          >
+            <Text style={styles.actionText}>Send Request</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -106,16 +108,6 @@ export default function MatchingScreen() {
     return (
       <View style={styles.loaderContainer}>
         <ActivityIndicator size="large" color="#6a11cb" />
-      </View>
-    );
-  }
-
-  if (matches.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyMessage}>
-          No matches found. Try updating your skills!
-        </Text>
       </View>
     );
   }
@@ -141,7 +133,6 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   title: {
-    marginTop: 20,
     fontSize: 24,
     fontWeight: "bold",
     color: "#333",
@@ -152,17 +143,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  emptyMessage: {
-    fontSize: 18,
-    color: "#555",
-    textAlign: "center",
   },
   listContainer: {
     paddingBottom: 20,
@@ -195,14 +175,23 @@ const styles = StyleSheet.create({
     color: "#777",
     marginVertical: 5,
   },
-  actionButton: {
-    backgroundColor: "#4CAF50",
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderRadius: 5,
-    alignSelf: "flex-start",
+  actionsRow: {
+    flexDirection: "row",
+    gap: 12,
   },
-  actionButtonText: {
+  viewButton: {
+    backgroundColor: "#2196F3",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 5,
+  },
+  requestButton: {
+    backgroundColor: "#4CAF50",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 5,
+  },
+  actionText: {
     color: "#fff",
     fontWeight: "bold",
   },

@@ -157,10 +157,16 @@ const NewChatScreen = ({ route, navigation }) => {
         </TouchableOpacity>
         <Image source={{ uri: user.photoUrl }} style={styles.headerAvatar} />
         <Text style={styles.headerTitle}>{user.firstName}</Text>
-        <TouchableOpacity style={[styles.headerIcon, { marginTop: 10 }]}>
+        <TouchableOpacity
+          style={[styles.headerIcon, { marginTop: 10 }]}
+          onPress={() => navigation.navigate('VoiceCallScreen', { user })}
+        >
           <Ionicons name="call-outline" size={24} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.headerIcon, { marginTop: 0 }]}>
+        <TouchableOpacity
+          style={[styles.headerIcon, { marginTop: 0 }]}
+          onPress={() => navigation.navigate('VideoCallScreen', { user })}
+        >
           <Ionicons name="videocam-outline" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
