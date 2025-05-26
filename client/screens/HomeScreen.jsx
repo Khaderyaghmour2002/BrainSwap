@@ -13,6 +13,7 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import ProfileScreen from "./ProfileScreen"; 
 import MatchingScreen from "./MatchingScreen";
 import ChatsScreen from "./ChatsScreen";
+import RequestsScreen from "./RequestsScreen";
 
 const { width } = Dimensions.get("window");
 
@@ -163,7 +164,7 @@ export default function HomeScreenWithCustomNav() {
       mainContent = <ProfileScreen />;
       break;
     case "requests":
-      mainContent = <RequestsTabContent />;
+      mainContent = <RequestsScreen />;
       break;
     default:
       mainContent = <HomeTabContent />;
