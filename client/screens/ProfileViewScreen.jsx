@@ -4,15 +4,13 @@ import {
   Text,
   StyleSheet,
   Image,
-  TouchableOpacity,
   ScrollView,
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
+import { doc, getDoc } from "firebase/firestore";
+import { FirestoreDB } from "../../server/firebaseConfig";
 import Ionicons from "react-native-vector-icons/Ionicons";
-import { updateDoc, arrayUnion } from "firebase/firestore";
 
 export default function ProfileViewScreen({ route }) {
   const { userId } = route.params;
@@ -36,26 +34,6 @@ export default function ProfileViewScreen({ route }) {
     fetchUser();
   }, []);
 
-
-const handleAddConnection = async () => {
-  const currentUser = FirebaseAuth.currentUser;
-  if (!currentUser) return;
-
-  try {
-    const currentUserRef = doc(FirestoreDB, "users", currentUser.uid);
-
-    await updateDoc(currentUserRef, {
-      connections: arrayUnion(userId), // Add to array (no duplicates)
-    });
-
-    Alert.alert("Success", "User added to your connections.");
-  } catch (error) {
-    console.error("Error adding connection:", error);
-    Alert.alert("Error", "Failed to add connection.");
-  }
-};
-
-
   if (loading) {
     return (
       <View style={styles.loaderContainer}>
@@ -65,7 +43,11 @@ const handleAddConnection = async () => {
   }
 
   if (!user) {
-    return <Text style={{ textAlign: "center", marginTop: 40 }}>User data not available.</Text>;
+    return (
+      <Text style={{ textAlign: "center", marginTop: 40 }}>
+        User data not available.
+      </Text>
+    );
   }
 
   return (
@@ -106,10 +88,6 @@ const handleAddConnection = async () => {
           {user.skillsToLearn?.length > 0 ? user.skillsToLearn.join(", ") : "No skills added."}
         </Text>
       </View>
-
-      <TouchableOpacity onPress={handleAddConnection} style={styles.button}>
-        <Text style={styles.buttonText}>Add to Connections</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -203,19 +181,5 @@ const styles = StyleSheet.create({
   sectionText: {
     fontSize: 14,
     color: "#555",
-  },
-  button: {
-    backgroundColor : "#6a11cb",
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    borderRadius: 8,
-    marginTop: 30,
-    width: "100%",
-  },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-    textAlign: "center",
   },
 });

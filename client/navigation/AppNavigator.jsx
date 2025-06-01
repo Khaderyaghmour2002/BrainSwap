@@ -20,7 +20,7 @@ import ProfileViewScreen from "../screens/ProfileViewScreen";
 import NewChatScreen from "../screens/NewChatScreen";
 import VoiceCallScreen from "../screens/VoiceCallScreen";
 import RequestsScreen from "../screens/RequestsScreen";
-
+import EditSkillsScreen from "../screens/EditSkillsScreen";
 
 
 const Stack = createStackNavigator();
@@ -48,6 +48,7 @@ export default function AppNavigator() {
       <Stack.Screen name="NewChatScreen" component={NewChatScreen} />
       <Stack.Screen name="VoiceCallScreen" component={VoiceCallScreen} />
       <Stack.Screen name="RequestsScreen" component={RequestsScreen} />
+      <Stack.Screen name="EditSkillsScreen" component={EditSkillsScreen} />
      
 
     </Stack.Navigator>

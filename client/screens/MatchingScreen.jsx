@@ -1,4 +1,3 @@
-// MatchingScreen.jsx (Upgraded with request-based connection logic)
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -18,7 +17,6 @@ import {
   query,
   where,
   setDoc,
-  updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
 import { FirestoreDB, FirebaseAuth } from "../../server/firebaseConfig";
@@ -27,16 +25,23 @@ import { useNavigation } from "@react-navigation/native";
 export default function MatchingScreen() {
   const navigation = useNavigation();
   const [matches, setMatches] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState(new Set());
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchMatches();
+  }, []);
 
   const fetchMatches = async () => {
     try {
       const currentUser = FirebaseAuth.currentUser;
       if (!currentUser) return;
 
+      // Fetch user profile
       const userDoc = await getDoc(doc(FirestoreDB, "users", currentUser.uid));
       const userData = userDoc.data();
 
+      // Fetch matching users
       const matchesQuery = query(
         collection(FirestoreDB, "users"),
         where("skillsToTeach", "array-contains-any", userData.skillsToLearn || [])
@@ -48,8 +53,20 @@ export default function MatchingScreen() {
         .map((doc) => ({ id: doc.id, ...doc.data() }));
 
       setMatches(fetched);
+
+      // Fetch sent requests with status "pending"
+      const requestsSnapshot = await getDocs(
+        query(
+          collection(FirestoreDB, "requests"),
+          where("from", "==", currentUser.uid),
+          where("status", "==", "pending")
+        )
+      );
+      const sentTo = new Set(requestsSnapshot.docs.map((doc) => doc.data().to));
+      setPendingRequests(sentTo);
     } catch (err) {
       console.error("Error fetching matches:", err);
+      Alert.alert("Error", "Failed to fetch matches.");
     } finally {
       setLoading(false);
     }
@@ -67,6 +84,7 @@ export default function MatchingScreen() {
         timestamp: serverTimestamp(),
       });
 
+      setPendingRequests((prev) => new Set(prev).add(targetUser.id));
       Alert.alert("Request Sent", `You have sent a request to ${targetUser.firstName}.`);
     } catch (err) {
       console.error("Failed to send request:", err);
@@ -74,35 +92,47 @@ export default function MatchingScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchMatches();
-  }, []);
+ const renderMatchItem = ({ item }) => {
+  const isPending = pendingRequests.has(item.id);
 
-  const renderMatchItem = ({ item }) => (
+  return (
     <View style={styles.matchCard}>
       <Image source={{ uri: item.photoUrl }} style={styles.profileImage} />
-      <View style={styles.matchDetails}>
+
+      <View style={styles.matchContent}>
         <Text style={styles.name}>{item.firstName}</Text>
-        <Text style={styles.matchSkills}>
-          Skills to Teach: {item.skillsToTeach.join(", ")}
+        <Text style={styles.skills}>
+          🎓 Teaching: {item.skillsToTeach.join(", ")}
         </Text>
+
         <View style={styles.actionsRow}>
           <TouchableOpacity
             style={styles.viewButton}
-            onPress={() => navigation.navigate("ProfileViewScreen", { userId: item.id })}
+            onPress={() =>
+              navigation.navigate("ProfileViewScreen", { userId: item.id })
+            }
           >
-            <Text style={styles.actionText}>View Profile</Text>
+            <Text style={styles.buttonText}>👀 View</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.requestButton}
-            onPress={() => sendRequest(item)}
-          >
-            <Text style={styles.actionText}>Send Request</Text>
-          </TouchableOpacity>
+
+          {isPending ? (
+            <View style={styles.pendingButton}>
+              <Text style={styles.buttonText}>⏳ Pending</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.requestButton}
+              onPress={() => sendRequest(item)}
+            >
+              <Text style={styles.buttonText}>🤝 Connect</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </View>
   );
+};
+
 
   if (loading) {
     return (
@@ -128,16 +158,17 @@ export default function MatchingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9f9f9",
-    paddingHorizontal: 20,
+    backgroundColor: "#F0F4F8",
+    paddingHorizontal: 16,
     paddingTop: 20,
   },
   title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 20,
+    fontSize: 26,
+    fontWeight: "700",
+    color: "#222",
     textAlign: "center",
+    marginTop: 20,
+    marginBottom: 16,
   },
   loaderContainer: {
     flex: 1,
@@ -149,31 +180,37 @@ const styles = StyleSheet.create({
   },
   matchCard: {
     flexDirection: "row",
-    alignItems: "center",
-    padding: 15,
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 16,
     marginVertical: 10,
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    elevation: 2,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    alignItems: "center",
   },
   profileImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 15,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginRight: 14,
+    backgroundColor: "#ddd",
   },
-  matchDetails: {
+  matchContent: {
     flex: 1,
   },
   name: {
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: "600",
     color: "#333",
   },
-  matchSkills: {
+  skills: {
     fontSize: 14,
-    color: "#777",
-    marginVertical: 5,
+    color: "#555",
+    marginTop: 4,
+    marginBottom: 10,
   },
   actionsRow: {
     flexDirection: "row",
@@ -182,17 +219,25 @@ const styles = StyleSheet.create({
   viewButton: {
     backgroundColor: "#2196F3",
     paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 5,
+    paddingHorizontal: 14,
+    borderRadius: 8,
   },
   requestButton: {
     backgroundColor: "#4CAF50",
     paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 5,
+    paddingHorizontal: 14,
+    borderRadius: 8,
   },
-  actionText: {
+  pendingButton: {
+    backgroundColor: "#aaa",
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  buttonText: {
     color: "#fff",
-    fontWeight: "bold",
+    fontWeight: "600",
   },
 });
+
+

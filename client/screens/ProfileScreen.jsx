@@ -226,7 +226,7 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.sectionTitle}>Skills to Teach</Text>
             <TouchableOpacity
               onPress={() =>
-                navigation.navigate("EditSkills", {
+                navigation.navigate("EditSkillsScreen", {
                   skills: user.skillsToTeach,
                   type: "teach",
                 })
@@ -253,7 +253,7 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.sectionTitle}>Skills to Learn</Text>
             <TouchableOpacity
               onPress={() =>
-                navigation.navigate("EditSkills", {
+                navigation.navigate("EditSkillsScreen", {
                   skills: user.skillsToLearn,
                   type: "learn",
                 })

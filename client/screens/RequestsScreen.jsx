@@ -13,7 +13,8 @@ import {
   collection,
   getDocs,
   doc,
-  deleteDoc
+  deleteDoc,
+  runTransaction
 } from 'firebase/firestore';
 import { FirebaseAuth, FirestoreDB } from '../../server/firebaseConfig';
 import { colors } from '../assets/constants';
@@ -54,48 +55,84 @@ export default function RequestsScreen() {
   }
 };
 
-  const handleAccept = async (request) => {
-    try {
-      // 1. Add each other to connections
-      const userRef = doc(FirestoreDB, 'users', currentUser.uid);
-      const requesterRef = doc(FirestoreDB, 'users', request.id);
+const handleAccept = async (request) => {
+  try {
+    const currentUid = FirebaseAuth.currentUser.uid;
 
-      await Promise.all([
-        FirestoreDB.runTransaction(async (transaction) => {
-          const userSnap = await transaction.get(userRef);
-          const conn = userSnap.data().connections || [];
-          transaction.update(userRef, {
-            connections: [...new Set([...conn, request.id])]
-          });
-        }),
-        FirestoreDB.runTransaction(async (transaction) => {
-          const userSnap = await transaction.get(requesterRef);
-          const conn = userSnap.data().connections || [];
-          transaction.update(requesterRef, {
-            connections: [...new Set([...conn, currentUser.uid])]
-          });
-        }),
-        deleteDoc(doc(FirestoreDB, 'users', currentUser.uid, 'requests', request.id))
-      ]);
+    const requestDocRef = doc(FirestoreDB, 'requests', request.id);
+    const userRef = doc(FirestoreDB, 'users', currentUid);
 
-      fetchRequests();
-      Alert.alert('Request Accepted');
-    } catch (err) {
-      console.error('Accept error:', err);
-      Alert.alert('Error', 'Failed to accept request.');
-    }
-  };
+    await runTransaction(FirestoreDB, async (transaction) => {
+      // Read the request document first
+      const requestSnap = await transaction.get(requestDocRef);
+      if (!requestSnap.exists()) {
+        throw new Error('Request document not found');
+      }
 
-  const handleReject = async (requestId) => {
-    try {
-      await deleteDoc(doc(FirestoreDB, 'users', currentUser.uid, 'requests', requestId));
-      fetchRequests();
-      Alert.alert('Request Rejected');
-    } catch (err) {
-      console.error('Reject error:', err);
-      Alert.alert('Error', 'Failed to reject request.');
-    }
-  };
+      const requestData = requestSnap.data();
+
+      // Validate that the current user is authorized
+      if (requestData.to !== currentUid) {
+        throw new Error('You are not authorized to accept this request');
+      }
+
+      const requesterUid = requestData.from;
+      const requesterRef = doc(FirestoreDB, 'users', requesterUid);
+
+      // Read both user documents
+      const userSnap = await transaction.get(userRef);
+      const requesterSnap = await transaction.get(requesterRef);
+
+      if (!userSnap.exists()) {
+        throw new Error('Your user profile is missing');
+      }
+      if (!requesterSnap.exists()) {
+        throw new Error('Requester profile is missing');
+      }
+
+      const userConnections = new Set(userSnap.data().connections || []);
+      const requesterConnections = new Set(requesterSnap.data().connections || []);
+
+      userConnections.add(requesterUid);
+      requesterConnections.add(currentUid);
+
+      // Update connections
+      transaction.update(userRef, { connections: Array.from(userConnections) });
+      transaction.update(requesterRef, { connections: Array.from(requesterConnections) });
+
+      // Update request status to accepted
+      transaction.update(requestDocRef, { status: 'accepted' });
+    });
+
+    fetchRequests();
+    Alert.alert('Success', 'Request accepted!');
+  } catch (error) {
+    console.error('Accept error:', error);
+    Alert.alert('Error', error.message || 'Failed to accept request.');
+  }
+};
+
+
+
+
+
+const handleReject = async (requestId) => {
+  try {
+    const requestRef = doc(FirestoreDB, 'requests', requestId);
+    await runTransaction(FirestoreDB, async (transaction) => {
+      const requestSnap = await transaction.get(requestRef);
+      if (!requestSnap.exists()) throw new Error('Request does not exist');
+      transaction.update(requestRef, { status: 'rejected' });
+    });
+
+    fetchRequests();
+    Alert.alert('Request Rejected');
+  } catch (err) {
+    console.error('Reject error:', err);
+    Alert.alert('Error', 'Failed to reject request.');
+  }
+};
+
 
   if (loading) {
     return <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 100 }} />;
