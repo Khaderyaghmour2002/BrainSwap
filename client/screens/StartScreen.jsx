@@ -8,6 +8,7 @@ import { theme } from "../core/theme";
 import Paragraph from "../components/UI/Paragraph";
 
 
+
 export default function StartScreen({ navigation }) {
   return (
     <Background>

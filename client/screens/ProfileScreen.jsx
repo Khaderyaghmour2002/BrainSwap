@@ -13,11 +13,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import * as ImagePicker from "expo-image-picker";
+import { useNavigation } from "@react-navigation/native";
 import styles from "../StyleSheets/ProfileScreenStyle";
 
-export default function ProfileScreen({ navigation }) {
+export default function ProfileScreen() {
+  const navigation = useNavigation();
   const [selectedImage, setSelectedImage] = useState(null);
-
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -28,7 +29,6 @@ export default function ProfileScreen({ navigation }) {
         if (currentUser) {
           const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
           const userDocSnap = await getDoc(userDocRef);
-
           if (userDocSnap.exists()) {
             setUser(userDocSnap.data());
           } else {
@@ -43,9 +43,9 @@ export default function ProfileScreen({ navigation }) {
         setLoading(false);
       }
     };
-
     fetchUserData();
   }, []);
+
   const choosePhotoOption = () => {
     Alert.alert(
       "Upload Photo",
@@ -61,21 +61,15 @@ export default function ProfileScreen({ navigation }) {
 
   const pickImageFromLibrary = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
     if (!permissionResult.granted) {
-      Alert.alert(
-        "Permission required",
-        "You need to grant permission to access your photo library."
-      );
+      Alert.alert("Permission required", "Photo library access is required.");
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
       aspect: [1, 1],
       quality: 1,
     });
-
     if (!result.canceled) {
       setSelectedImage(result.assets[0].uri);
       uploadPhoto(result.assets[0].uri);
@@ -84,21 +78,15 @@ export default function ProfileScreen({ navigation }) {
 
   const takePhotoWithCamera = async () => {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-
     if (!permissionResult.granted) {
-      Alert.alert(
-        "Permission required",
-        "You need to grant permission to access your camera."
-      );
+      Alert.alert("Permission required", "Camera access is required.");
       return;
     }
-
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [1, 1],
       quality: 1,
     });
-
     if (!result.canceled) {
       setSelectedImage(result.assets[0].uri);
       uploadPhoto(result.assets[0].uri);
@@ -112,10 +100,8 @@ export default function ProfileScreen({ navigation }) {
         Alert.alert("Error", "No user is logged in.");
         return;
       }
-
       const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
       await updateDoc(userDocRef, { photoUrl: uri });
-
       setUser((prev) => ({ ...prev, photoUrl: uri }));
       Alert.alert("Success", "Profile photo updated successfully!");
     } catch (error) {
@@ -123,7 +109,6 @@ export default function ProfileScreen({ navigation }) {
       Alert.alert("Error", "Failed to upload photo. Please try again.");
     }
   };
-
 
   if (loading) {
     return (
@@ -143,12 +128,10 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#f5f7fa" }}>
-      {/* Gradient Header */}
       <LinearGradient
         colors={["#6a11cb", "#2575fc"]}
         style={styles.headerCurvedBackground}
       >
-        {/* Settings Icon */}
         <TouchableOpacity
           style={styles.settingsIcon}
           onPress={() => navigation.navigate("Settings")}
@@ -158,7 +141,6 @@ export default function ProfileScreen({ navigation }) {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.profileContainer}>
-        {/* Avatar + Name + Bio */}
         <View style={styles.profileAvatarContainer}>
           <View style={styles.avatarBackground}>
             {selectedImage || user.photoUrl ? (
@@ -178,13 +160,10 @@ export default function ProfileScreen({ navigation }) {
           <TouchableOpacity
             style={styles.editPhotoButton}
             onPress={choosePhotoOption}
-
           >
             <Ionicons name="camera-outline" size={22} color="#6a11cb" />
           </TouchableOpacity>
-          <Text style={styles.profileName}>
-            {user.firstName || "Unknown User"}
-          </Text>
+          <Text style={styles.profileName}>{user.firstName || "Unknown User"}</Text>
           <View style={styles.bioContainer}>
             <Text style={styles.profileBio}>
               {user.bio || "No bio available."}
@@ -198,7 +177,6 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Stats Section */}
         <View style={styles.profileStatsCard}>
           <View style={styles.profileStatsRow}>
             <View style={styles.profileStatItem}>
@@ -220,7 +198,6 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Skills Section */}
         <View style={styles.skillsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Skills to Teach</Text>
@@ -275,13 +252,12 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Logout Button */}
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={async () => {
             try {
-              await FirebaseAuth.signOut(); // Log out the current user
-              navigation.navigate("StartScreen"); // Navigate to StartScreen after logout
+              await FirebaseAuth.signOut();
+              navigation.replace("StartScreen");
             } catch (error) {
               console.error("Error logging out:", error);
               Alert.alert("Error", "Failed to log out. Please try again.");
