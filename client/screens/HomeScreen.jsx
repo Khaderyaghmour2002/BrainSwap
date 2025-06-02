@@ -20,7 +20,7 @@ const { width } = Dimensions.get("window");
 
 
 // ----------- Home Tab Content -----------
-import { doc, getDoc } from "firebase/firestore"; // Firestore imports
+import { doc, getDoc,query,collection,where,getDocs } from "firebase/firestore"; // Firestore imports
 import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig"; // Import Firebase instances
 
 
@@ -36,6 +36,7 @@ function HomeTabContent() {
     { name: "Maria", skill: "Graphic Design" },
   ];
 
+  
   useEffect(() => {
     const fetchUserName = async () => {
       try {

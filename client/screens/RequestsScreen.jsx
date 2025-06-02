@@ -14,8 +14,7 @@ import {
   getDocs,
   doc,
   updateDoc,
-  arrayUnion,
-  deleteDoc,
+  getDoc,
   runTransaction,
   query,
   where,
@@ -62,26 +61,50 @@ const handleAccept = async (request) => {
   try {
     const currentUid = FirebaseAuth.currentUser.uid;
     const requesterUid = request.from;
+    const requestId = request.id;
 
-    // 1. Update request status to 'accepted'
-    const requestRef = doc(FirestoreDB, 'requests', request.id);
-    await updateDoc(requestRef, { status: 'accepted' });
-
-    // 2. Add requester to current user's connections
-    const currentUserRef = doc(FirestoreDB, 'users', currentUid);
-    await updateDoc(currentUserRef, {
-      connections: arrayUnion(requesterUid),
+ 
+    // Step 1: Update request status
+    console.log("🟡 Updating request status to 'accepted'...");
+    await updateDoc(doc(FirestoreDB, 'requests', requestId), {
+      status: 'accepted',
     });
 
-    // Optionally refresh the list
-    fetchRequests();
+    // Step 2: Add requester to current user's connections
+    const currentUserRef = doc(FirestoreDB, 'users', currentUid);
+    const currentSnap = await getDoc(currentUserRef);
+    const currentConnections = currentSnap.exists() ? currentSnap.data().connections || [] : [];
 
-    Alert.alert("Success", "Request accepted!");
+    if (!currentConnections.includes(requesterUid)) {
+      await updateDoc(currentUserRef, {
+        connections: [...currentConnections, requesterUid],
+      });
+    } else {
+      console.log("⚠️ Requester already in current user's connections.");
+    }
+
+    // Step 3: Add current user to requester's connections
+    const requesterRef = doc(FirestoreDB, 'users', requesterUid);
+    const requesterSnap = await getDoc(requesterRef);
+    const requesterConnections = requesterSnap.exists() ? requesterSnap.data().connections || [] : [];
+    console.log("🟢 Requester connections before update:", requesterConnections);
+
+    if (!requesterConnections.includes(currentUid)) {
+      await updateDoc(requesterRef, {
+        connections: [...requesterConnections, currentUid],
+      });
+    } else {
+      console.log("⚠️ Current user already in requester's connections.");
+    }
+
+    Alert.alert('✅ Connection accepted', 'Both users are now connected.');
+    fetchRequests();
   } catch (error) {
-    console.error("Accept error:", error);
-    Alert.alert("Error", error.message || "Failed to accept request.");
+    console.error('❌ Accept error:', error);
+    Alert.alert('❌ Error', error.message || 'Something went wrong');
   }
 };
+
 
 
 
