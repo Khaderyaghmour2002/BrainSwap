@@ -32,54 +32,58 @@ export default function MatchingScreen() {
     fetchMatches();
   }, []);
 
-  const fetchMatches = async () => {
-    try {
-      const currentUser = FirebaseAuth.currentUser;
-      if (!currentUser) return;
+const fetchMatches = async () => {
+  try {
+    const currentUser = FirebaseAuth.currentUser;
+    if (!currentUser) return;
 
-      const userDoc = await getDoc(doc(FirestoreDB, "users", currentUser.uid));
-      const userData = userDoc.data();
+    const userDoc = await getDoc(doc(FirestoreDB, "users", currentUser.uid));
+    const userData = userDoc.data();
+    const userConnections = new Set(userData.connections || []);
 
-      const matchesQuery = query(
-        collection(FirestoreDB, "users"),
-        where("skillsToTeach", "array-contains-any", userData.skillsToLearn || [])
-      );
+    const matchesQuery = query(
+      collection(FirestoreDB, "users"),
+      where("skillsToTeach", "array-contains-any", userData.skillsToLearn || [])
+    );
 
-      const querySnapshot = await getDocs(matchesQuery);
-      const fetched = querySnapshot.docs
-        .filter((doc) => doc.id !== currentUser.uid)
-        .map((doc) => ({ id: doc.id, ...doc.data() }));
+    const querySnapshot = await getDocs(matchesQuery);
+    const fetched = querySnapshot.docs
+      .filter((doc) =>
+        doc.id !== currentUser.uid && !userConnections.has(doc.id)
+      )
+      .map((doc) => ({ id: doc.id, ...doc.data() }));
 
-      setMatches(fetched);
+    setMatches(fetched);
 
-      // Sent requests
-      const sentSnapshot = await getDocs(
-        query(
-          collection(FirestoreDB, "requests"),
-          where("from", "==", currentUser.uid),
-          where("status", "==", "pending")
-        )
-      );
-      const sentTo = new Set(sentSnapshot.docs.map((doc) => doc.data().to));
+    // Sent requests
+    const sentSnapshot = await getDocs(
+      query(
+        collection(FirestoreDB, "requests"),
+        where("from", "==", currentUser.uid),
+        where("status", "==", "pending")
+      )
+    );
+    const sentTo = new Set(sentSnapshot.docs.map((doc) => doc.data().to));
 
-      // Received requests
-      const receivedSnapshot = await getDocs(
-        query(
-          collection(FirestoreDB, "requests"),
-          where("to", "==", currentUser.uid),
-          where("status", "==", "pending")
-        )
-      );
-      const receivedFrom = new Set(receivedSnapshot.docs.map((doc) => doc.data().from));
+    // Received requests
+    const receivedSnapshot = await getDocs(
+      query(
+        collection(FirestoreDB, "requests"),
+        where("to", "==", currentUser.uid),
+        where("status", "==", "pending")
+      )
+    );
+    const receivedFrom = new Set(receivedSnapshot.docs.map((doc) => doc.data().from));
 
-      setPendingRequests({ sent: sentTo, received: receivedFrom });
-    } catch (err) {
-      console.error("Error fetching matches:", err);
-      Alert.alert("Error", "Failed to fetch matches.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    setPendingRequests({ sent: sentTo, received: receivedFrom });
+  } catch (err) {
+    console.error("Error fetching matches:", err);
+    Alert.alert("Error", "Failed to fetch matches.");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const sendRequest = async (targetUser) => {
     const currentUser = FirebaseAuth.currentUser;

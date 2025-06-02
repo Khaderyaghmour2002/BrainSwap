@@ -2,70 +2,52 @@ import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
   Pressable,
   Animated,
+  Alert,
 } from "react-native";
-// If using Expo, replace with: import { LinearGradient } from 'expo-linear-gradient';
 import { LinearGradient } from "expo-linear-gradient";
-import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig"; // Import FirestoreDB
-import { doc, setDoc } from "firebase/firestore"; // Firestore imports
-
+import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
+import { doc, setDoc } from "firebase/firestore";
 
 export default function SkillsToTeachScreen({ navigation }) {
-  const predefinedSkills = [
-    "3D Modelling", "Accounting", "AI", "App Development", "Chess",
-    "Cinematography", "Content Writing", "Cooking", "Copywriting", "Cycling",
-    "Data Analysis", "Data Science", "Digital Marketing", "Drawing", "Entrepreneurship",
-    "Excel", "Film Making", "Finance", "Fitness Training", "Foreign Languages",
-    "French", "Game Design", "Gardening", "German", "Graphic Design",
-    "Guitar", "Horseback Riding", "Knitting", "Leadership", "Machine Learning",
-    "Mandarin Chinese", "Music Production", "Networking", "Painting", "Piano",
-    "PowerPoint", "Programming", "Project Management", "Public Speaking", "SEO",
-    "Singing", "Social Media Marketing", "Spanish", "Sports", "Time Management",
-    "UI/UX Design", "Video Editing", "Vocal Training", "Voice Acting", "Web Design",
-    "Web Development", "Writing", "Yoga",
-  ].sort();
+  const skillCategories = {
+    Languages: ["English", "Arabic", "Spanish", "Hebrew"],
+    Programming: ["JavaScript", "Python", "HTML", "CSS", "React", "Node.js", "Firebase", "Flutter"],
+    Design: ["Photoshop", "Figma", "Canva", "Illustrator"],
+    Music: ["Piano", "Guitar", "Drums", "Oud"],
+  };
 
-  // Scale animations for subtle "pop" effect on press
+  const flatSkillList = Object.values(skillCategories).flat().sort();
+  const [searchText, setSearchText] = useState("");
+  const [selectedSkills, setSelectedSkills] = useState([]);
+  const maxSkills = 5;
+
   const scaleAnimations = useMemo(() => {
-    return predefinedSkills.reduce((map, skill) => {
+    return flatSkillList.reduce((map, skill) => {
       map[skill] = new Animated.Value(1);
       return map;
     }, {});
-  }, [predefinedSkills]);
+  }, []);
 
-  const [selectedSkills, setSelectedSkills] = useState([]);
-  const onNextPressed = async () => {
-    try {
-      // get the currently logged-in user ID
-      const currentUser = FirebaseAuth.currentUser;  
-      if (!currentUser) {
-        Alert.alert("Error", "No user is logged in!");
-        return;
-      }
-  
-      // reference to the user’s doc in Firestore (assuming "users" collection)
-      const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
-  
-      // Save or merge the selected skills into that doc
-      await setDoc(
-        userDocRef, 
-        { skillsToTeach: selectedSkills },  // field name in Firestore
-        { merge: true }                     // merges instead of overwriting entire doc
-      );
-  
-      // Then navigate or do any success action
-      navigation.replace("ProfileMakerScreen1");
-    } catch (error) {
-      console.error("Error saving skills to Firestore:", error);
-      Alert.alert("Error", "Unable to save skills. Please try again.");
+  const filteredSkills = useMemo(() => {
+    if (!searchText.trim()) return skillCategories;
+    const lower = searchText.toLowerCase();
+    const filtered = {};
+
+    for (let [category, skills] of Object.entries(skillCategories)) {
+      const match = skills.filter((s) => s.toLowerCase().includes(lower));
+      if (match.length > 0) filtered[category] = match;
     }
-  };
+
+    return filtered;
+  }, [searchText]);
+
   const toggleSkill = (skill) => {
-    // Subtle bounce animation on tap
     Animated.sequence([
       Animated.timing(scaleAnimations[skill], {
         toValue: 1.05,
@@ -79,127 +61,144 @@ export default function SkillsToTeachScreen({ navigation }) {
       }),
     ]).start();
 
-    // Update the selected skills array
-    setSelectedSkills((prev) =>
-      prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]
-    );
+    setSelectedSkills((prev) => {
+      if (prev.includes(skill)) return prev.filter((s) => s !== skill);
+      if (prev.length >= maxSkills) {
+        Alert.alert("Limit Reached", `You can choose up to ${maxSkills} skills.`);
+        return prev;
+      }
+      return [...prev, skill];
+    });
+  };
+
+  const onNextPressed = async () => {
+    try {
+      const currentUser = FirebaseAuth.currentUser;
+      if (!currentUser) {
+        Alert.alert("Error", "No user is logged in!");
+        return;
+      }
+
+      const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
+      await setDoc(userDocRef, { skillsToTeach: selectedSkills }, { merge: true });
+      navigation.replace("ProfileMakerScreen1");
+    } catch (error) {
+      console.error("Error saving skills to Firestore:", error);
+      Alert.alert("Error", "Unable to save skills. Please try again.");
+    }
   };
 
   return (
-    <LinearGradient
-      colors={["#eef2f3", "#8e9eab"]} // Subtle gradient background
-      style={styles.gradientContainer}
-    >
+    <LinearGradient colors={["#eef2f3", "#8e9eab"]} style={styles.gradientContainer}>
       <View style={styles.header}>
         <Text style={styles.title}>What skills can you teach?</Text>
-        <Text style={styles.subtitle}>Tap to select your skills</Text>
+        <Text style={styles.subtitle}>Select up to {maxSkills} skills</Text>
+
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search skills..."
+          value={searchText}
+          onChangeText={setSearchText}
+        />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollableList}>
-        {predefinedSkills.map((skill) => {
-          const isSelected = selectedSkills.includes(skill);
-          const animatedStyle = {
-            transform: [{ scale: scaleAnimations[skill] }],
-          };
+        {Object.entries(filteredSkills).map(([category, skills]) => (
+          <View key={category} style={styles.categoryBlock}>
+            <Text style={styles.categoryTitle}>{category}</Text>
+            <View style={styles.skillWrap}>
+              {skills.map((skill) => {
+                const isSelected = selectedSkills.includes(skill);
+                const animatedStyle = { transform: [{ scale: scaleAnimations[skill] }] };
 
-          return (
-            <Animated.View key={skill} style={animatedStyle}>
-              <TouchableOpacity
-                style={[
-                  styles.skillBlock,
-                  isSelected && styles.selectedSkillBlock,
-                ]}
-                onPress={() => toggleSkill(skill)}
-                activeOpacity={0.9}
-              >
-                <Text
-                  style={[
-                    styles.skillText,
-                    isSelected && styles.selectedSkillText,
-                  ]}
-                >
-                  {skill}
-                </Text>
-                {isSelected && <Text style={styles.selectedCheck}>✓</Text>}
-              </TouchableOpacity>
-            </Animated.View>
-          );
-        })}
+                return (
+                  <Animated.View key={skill} style={animatedStyle}>
+                    <TouchableOpacity
+                      style={[styles.skillBlock, isSelected && styles.selectedSkillBlock]}
+                      onPress={() => toggleSkill(skill)}
+                    >
+                      <Text
+                        style={[styles.skillText, isSelected && styles.selectedSkillText]}
+                      >
+                        {skill}
+                      </Text>
+                      {isSelected && <Text style={styles.selectedCheck}>✓</Text>}
+                    </TouchableOpacity>
+                  </Animated.View>
+                );
+              })}
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+
+      <Text style={styles.counterText}>
+        Selected: {selectedSkills.length} / {maxSkills}
+      </Text>
+
       <Pressable
-  style={({ pressed }) => [
-    styles.nextButton,
-    pressed && { opacity: 0.85 },
-  ]}
-  onPress={onNextPressed} // <-- call the function above
->
-  <Text style={styles.nextButtonText}>Next</Text>
-</Pressable>
-      </ScrollView> 
-
-      
+        style={[
+          styles.nextButton,
+          selectedSkills.length === 0 && { opacity: 0.4 },
+        ]}
+        disabled={selectedSkills.length === 0}
+        onPress={onNextPressed}
+      >
+        <Text style={styles.nextButtonText}>Next</Text>
+      </Pressable>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  gradientContainer: {
-    flex: 1,
-    // Increase top padding here:
-    paddingTop: 60,         // more space at the top
-    paddingHorizontal: 16,
+  gradientContainer: { flex: 1, paddingTop: 60, paddingHorizontal: 16 },
+  header: { alignItems: "center", marginBottom: 20 },
+  title: { fontSize: 26, fontWeight: "700", color: "#2b3a67", marginBottom: 6 },
+  subtitle: { fontSize: 15, color: "#6e7d9b", marginBottom: 12 },
+  searchInput: {
+    backgroundColor: "#fff",
+    padding: 10,
+    borderRadius: 12,
+    width: "100%",
+    fontSize: 14,
+    shadowColor: "#aaa",
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
-  header: {
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 26,
+  scrollableList: { paddingBottom: 20 },
+  categoryBlock: { marginBottom: 24 },
+  categoryTitle: {
+    fontSize: 18,
     fontWeight: "700",
-    color: "#2b3a67",
-    textAlign: "center",
-    marginBottom: 6,
+    color: "#444",
+    marginBottom: 8,
+    marginLeft: 6,
   },
-  subtitle: {
-    fontSize: 16,
-    fontWeight: "400",
-    color: "#6e7d9b",
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  scrollableList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    justifyContent: "center",
-    marginBottom: 24,
-  },
+  skillWrap: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   skillBlock: {
     backgroundColor: "#ffffffcc",
     borderColor: "#ddd",
     borderWidth: 1,
     borderRadius: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    marginBottom: 10,
     shadowColor: "#aaa",
-    shadowOffset: { width: 1, height: 2 },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
     elevation: 2,
-    position: "relative",
-    // Let the block auto-size by text length
-    alignSelf: "flex-start",
   },
   selectedSkillBlock: {
     backgroundColor: "#4caf50",
     borderColor: "#4caf50",
-    elevation: 5,
+    elevation: 4,
   },
   skillText: {
     fontSize: 14,
     color: "#333",
     fontWeight: "600",
-    textAlign: "center",
   },
   selectedSkillText: {
     color: "#fff",
@@ -207,37 +206,30 @@ const styles = StyleSheet.create({
   },
   selectedCheck: {
     position: "absolute",
-    bottom: 0,
-    right: 4,
+    right: 8,
+    top: 6,
     color: "#fff",
-    fontSize: 16,
-    fontWeight: "900",
+    fontWeight: "bold",
+    fontSize: 14,
+  },
+  counterText: {
+    textAlign: "center",
+    fontSize: 14,
+    marginBottom: 12,
+    color: "#555",
   },
   nextButton: {
-  
-    marginRight:84,
-    marginLeft:65,
-    marginTop:30,
-
-    bottom: 10,         
-    alignSelf: "center", 
     backgroundColor: "#4caf50",
-    borderRadius: 25,
+    marginHorizontal: 50,
     paddingVertical: 14,
-    paddingHorizontal: 32,
-    shadowColor: "#444",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
+    borderRadius: 25,
+    alignItems: "center",
+    marginBottom: 24,
+    elevation: 3,
   },
-  
-
-
   nextButtonText: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "700",
-    textAlign: "center",
   },
 });
