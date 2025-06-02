@@ -13,12 +13,15 @@ import {
   collection,
   getDocs,
   doc,
+  updateDoc,
+  arrayUnion,
   deleteDoc,
-  runTransaction
+  runTransaction,
+  query,
+  where,
 } from 'firebase/firestore';
 import { FirebaseAuth, FirestoreDB } from '../../server/firebaseConfig';
 import { colors } from '../assets/constants';
-import { query, where} from 'firebase/firestore';
 
 export default function RequestsScreen() {
   const [requests, setRequests] = useState([]);
@@ -31,92 +34,59 @@ export default function RequestsScreen() {
     }
   }, []);
 
- const fetchRequests = async () => {
-  try {
-    const q = query(
-      collection(FirestoreDB, 'requests'),
-      where('to', '==', currentUser.uid),
-      where('status', '==', 'pending') // Only show pending requests
-    );
+  const fetchRequests = async () => {
+    try {
+      const q = query(
+        collection(FirestoreDB, 'requests'),
+        where('to', '==', currentUser.uid),
+        where('status', '==', 'pending')
+      );
 
-    const snapshot = await getDocs(q);
+      const snapshot = await getDocs(q);
 
-    const data = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+      const data = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
-    setRequests(data);
-  } catch (error) {
-    console.error('Error fetching requests:', error);
-    Alert.alert('Error', 'Failed to fetch requests.');
-  } finally {
-    setLoading(false);
-  }
-};
+      setRequests(data);
+    } catch (error) {
+      console.error('Error fetching requests:', error);
+      Alert.alert('Error', 'Failed to fetch requests.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
 const handleAccept = async (request) => {
   try {
     const currentUid = FirebaseAuth.currentUser.uid;
+    const requesterUid = request.from;
 
-    const requestDocRef = doc(FirestoreDB, 'requests', request.id);
-    const userRef = doc(FirestoreDB, 'users', currentUid);
+    // 1. Update request status to 'accepted'
+    const requestRef = doc(FirestoreDB, 'requests', request.id);
+    await updateDoc(requestRef, { status: 'accepted' });
 
-    await runTransaction(FirestoreDB, async (transaction) => {
-      // Read the request document first
-      const requestSnap = await transaction.get(requestDocRef);
-      if (!requestSnap.exists()) {
-        throw new Error('Request document not found');
-      }
-
-      const requestData = requestSnap.data();
-
-      // Validate that the current user is authorized
-      if (requestData.to !== currentUid) {
-        throw new Error('You are not authorized to accept this request');
-      }
-
-      const requesterUid = requestData.from;
-      const requesterRef = doc(FirestoreDB, 'users', requesterUid);
-
-      // Read both user documents
-      const userSnap = await transaction.get(userRef);
-      const requesterSnap = await transaction.get(requesterRef);
-
-      if (!userSnap.exists()) {
-        throw new Error('Your user profile is missing');
-      }
-      if (!requesterSnap.exists()) {
-        throw new Error('Requester profile is missing');
-      }
-
-      const userConnections = new Set(userSnap.data().connections || []);
-      const requesterConnections = new Set(requesterSnap.data().connections || []);
-
-      userConnections.add(requesterUid);
-      requesterConnections.add(currentUid);
-
-      // Update connections
-      transaction.update(userRef, { connections: Array.from(userConnections) });
-      transaction.update(requesterRef, { connections: Array.from(requesterConnections) });
-
-      // Update request status to accepted
-      transaction.update(requestDocRef, { status: 'accepted' });
+    // 2. Add requester to current user's connections
+    const currentUserRef = doc(FirestoreDB, 'users', currentUid);
+    await updateDoc(currentUserRef, {
+      connections: arrayUnion(requesterUid),
     });
 
+    // Optionally refresh the list
     fetchRequests();
-    Alert.alert('Success', 'Request accepted!');
+
+    Alert.alert("Success", "Request accepted!");
   } catch (error) {
-    console.error('Accept error:', error);
-    Alert.alert('Error', error.message || 'Failed to accept request.');
+    console.error("Accept error:", error);
+    Alert.alert("Error", error.message || "Failed to accept request.");
   }
 };
 
 
 
 
-
-const handleReject = async (requestId) => {
+  const handleReject = async (requestId) => {
   try {
     const requestRef = doc(FirestoreDB, 'requests', requestId);
     await runTransaction(FirestoreDB, async (transaction) => {
@@ -125,7 +95,7 @@ const handleReject = async (requestId) => {
       transaction.update(requestRef, { status: 'rejected' });
     });
 
-    fetchRequests();
+    fetchRequests(); // Refresh list
     Alert.alert('Request Rejected');
   } catch (err) {
     console.error('Reject error:', err);
@@ -133,6 +103,30 @@ const handleReject = async (requestId) => {
   }
 };
 
+
+  const renderRequestItem = ({ item }) => (
+    <View style={styles.card}>
+      <Image source={{ uri: item.photoUrl }} style={styles.avatar} />
+      <View style={styles.infoContainer}>
+        <Text style={styles.name}>{item.firstName}</Text>
+        <Text style={styles.subtitle}>Wants to connect with you</Text>
+        <View style={styles.buttonsContainer}>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#4CAF50' }]}
+            onPress={() => handleAccept(item)}
+          >
+            <Text style={styles.buttonText}>Accept</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#f44336' }]}
+            onPress={() => handleReject(item.id)}
+          >
+            <Text style={styles.buttonText}>Reject</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
 
   if (loading) {
     return <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 100 }} />;
@@ -151,28 +145,7 @@ const handleReject = async (requestId) => {
       contentContainerStyle={styles.container}
       data={requests}
       keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <View style={styles.card}>
-          <Image source={{ uri: item.photoUrl }} style={styles.avatar} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{item.firstName}</Text>
-            <View style={styles.buttons}>
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: '#4CAF50' }]}
-                onPress={() => handleAccept(item)}
-              >
-                <Text style={styles.buttonText}>Accept</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: '#f44336' }]}
-                onPress={() => handleReject(item.id)}
-              >
-                <Text style={styles.buttonText}>Reject</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      )}
+      renderItem={renderRequestItem}
     />
   );
 }
@@ -180,45 +153,61 @@ const handleReject = async (requestId) => {
 const styles = StyleSheet.create({
   container: {
     padding: 16,
+    paddingBottom: 40,
+    backgroundColor: '#F7FAFC',
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F7FAFC',
   },
   emptyText: {
-    fontSize: 16,
-    color: '#777',
+    fontSize: 18,
+    color: '#888',
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    marginVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     elevation: 2,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginRight: 12,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 14,
     backgroundColor: '#ccc',
   },
-  name: {
-    fontSize: 16,
-    fontWeight: 'bold',
+  infoContainer: {
+    flex: 1,
   },
-  buttons: {
+  name: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  buttonsContainer: {
     flexDirection: 'row',
-    marginTop: 8,
-    gap: 10,
+    marginTop: 10,
+    gap: 12,
   },
   button: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 6,
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
   },
   buttonText: {
     color: '#fff',

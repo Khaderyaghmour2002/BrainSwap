@@ -26,36 +26,36 @@ export default function LocationPickerScreen({ navigation }) {
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchSuggestions = async (query) => {
-    try {
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${query}&types=(cities)&key=AIzaSyDS2lHkwzsP0sPQD7oBqXPnHHjnOliuaRM`
-      );
-      const data = await response.json();
-      if (data.status === "OK") {
-        setSearchResults(
-          data.predictions.map((prediction) => ({
-            id: prediction.place_id,
-            name: prediction.description,
-          }))
-        );
-      } else {
-        console.error("Error fetching suggestions:", data.error_message);
-        setSearchResults([]);
-      }
-    } catch (error) {
-      console.error("Error fetching suggestions:", error);
-      setSearchResults([]);
-    }
-  };
+  // const fetchSuggestions = async (query) => {
+  //   try {
+  //     const response = await fetch(
+  //       `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${query}&types=(cities)&key=AIzaSyDS2lHkwzsP0sPQD7oBqXPnHHjnOliuaRM`
+  //     );
+  //     const data = await response.json();
+  //     if (data.status === "OK") {
+  //       setSearchResults(
+  //         data.predictions.map((prediction) => ({
+  //           id: prediction.place_id,
+  //           name: prediction.description,
+  //         }))
+  //       );
+  //     } else {
+  //       console.error("Error fetching suggestions:", data.error_message);
+  //       setSearchResults([]);
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching suggestions:", error);
+  //     setSearchResults([]);
+  //   }
+  // };
 
   const handleSearch = (query) => {
     setSearchQuery(query);
     if (query.trim() === "") {
       setSearchResults([]);
-    } else {
-      fetchSuggestions(query);
-    }
+     }// else {
+    //   fetchSuggestions(query);
+    // }
   };
 
   const selectLocation = async () => {
