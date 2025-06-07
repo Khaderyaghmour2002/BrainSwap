@@ -110,6 +110,23 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleVerifyPrompt = (skill) => {
+    Alert.alert(
+      `Verify Skill: ${skill.name}`,
+      `This skill isn't verified yet. Would you like to take a short test to verify it now?`,
+      [
+        { text: "Not now", style: "cancel" },
+        {
+          text: "Verify Now",
+          onPress: () => {
+            console.log(`Navigating to SkillVerificationScreen for skill: ${skill.name}`);
+            navigation.navigate("SkillVerificationScreen", { skill: skill.name });
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loaderContainer}>
@@ -185,23 +202,22 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.skillsPillContainer}>
             {user.skillsToTeach?.length > 0 ? (
-user.skillsToTeach.map((skill, index) => (
-  <View
-    key={skill.name + index}
-    style={[styles.skillPill, { flexDirection: "row", alignItems: "center" }]}
-  >
-    <Text style={styles.skillPillText}>{skill.name}</Text>
-    <Ionicons
-      name={skill.verified ? "checkmark-circle" : "help-circle"}
-      size={18}
-      color={skill.verified ? "#4caf50" : "#fbc02d"}
-      style={{ marginLeft: 6 }}
-    />
-  </View>
-))
-
-
-
+              user.skillsToTeach.map((skill, index) => (
+                <View
+                  key={skill.name + index}
+                  style={[styles.skillPill, { flexDirection: "row", alignItems: "center" }]}
+                >
+                  <Text style={styles.skillPillText}>{skill.name}</Text>
+                  <TouchableOpacity onPress={() => !skill.verified && handleVerifyPrompt(skill)}>
+                    <Ionicons
+                      name={skill.verified ? "checkmark-circle" : "help-circle"}
+                      size={18}
+                      color={skill.verified ? "#4caf50" : "#fbc02d"}
+                      style={{ marginLeft: 6 }}
+                    />
+                  </TouchableOpacity>
+                </View>
+              ))
             ) : (
               <Text>No skills added yet.</Text>
             )}

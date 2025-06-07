@@ -1,0 +1,34 @@
+{
+  "JavaScript": [
+    {
+      "question": "What is the result of `typeof null` in JavaScript?",
+      "options": ["null", "object", "undefined", "number"],
+      "answer": "object"
+    },
+    {
+      "question": "Which of the following is NOT a primitive type in JavaScript?",
+      "options": ["String", "Number", "Boolean", "Array"],
+      "answer": "Array"
+    },
+    {
+      "question": "What does the `===` operator do in JavaScript?",
+      "options": [
+        "Assigns a value",
+        "Compares value and type",
+        "Compares only value",
+        "Checks truthiness"
+      ],
+      "answer": "Compares value and type"
+    },
+    {
+      "question": "Which method is used to parse a JSON string into a JavaScript object?",
+      "options": ["JSON.stringify()", "JSON.parse()", "parseJSON()", "toObject()"],
+      "answer": "JSON.parse()"
+    },
+    {
+      "question": "What will `console.log(0.1 + 0.2 === 0.3)` print?",
+      "options": ["true", "false", "undefined", "NaN"],
+      "answer": "false"
+    }
+  ]
+}
