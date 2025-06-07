@@ -128,10 +128,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#f5f7fa" }}>
-      <LinearGradient
-        colors={["#6a11cb", "#2575fc"]}
-        style={styles.headerCurvedBackground}
-      >
+      <LinearGradient colors={["#6a11cb", "#2575fc"]} style={styles.headerCurvedBackground}>
         <TouchableOpacity
           style={styles.settingsIcon}
           onPress={() => navigation.navigate("Settings")}
@@ -144,34 +141,19 @@ export default function ProfileScreen() {
         <View style={styles.profileAvatarContainer}>
           <View style={styles.avatarBackground}>
             {selectedImage || user.photoUrl ? (
-              <Image
-                source={{ uri: selectedImage || user.photoUrl }}
-                style={styles.profileAvatarImage}
-              />
+              <Image source={{ uri: selectedImage || user.photoUrl }} style={styles.profileAvatarImage} />
             ) : (
-              <Ionicons
-                name="person-circle-outline"
-                size={100}
-                color="#fff"
-                style={styles.profileAvatarIcon}
-              />
+              <Ionicons name="person-circle-outline" size={100} color="#fff" style={styles.profileAvatarIcon} />
             )}
           </View>
-          <TouchableOpacity
-            style={styles.editPhotoButton}
-            onPress={choosePhotoOption}
-          >
+          <TouchableOpacity style={styles.editPhotoButton} onPress={choosePhotoOption}>
             <Ionicons name="camera-outline" size={22} color="#6a11cb" />
           </TouchableOpacity>
           <Text style={styles.profileName}>{user.firstName || "Unknown User"}</Text>
+
           <View style={styles.bioContainer}>
-            <Text style={styles.profileBio}>
-              {user.bio || "No bio available."}
-            </Text>
-            <TouchableOpacity
-              style={styles.editIcon}
-              onPress={() => navigation.navigate("EditBio", { bio: user.bio })}
-            >
+            <Text style={styles.profileBio}>{user.bio || "No bio available."}</Text>
+            <TouchableOpacity style={styles.editIcon} onPress={() => navigation.navigate("EditBio", { bio: user.bio })}>
               <Ionicons name="pencil-outline" size={20} color="#6a11cb" />
             </TouchableOpacity>
           </View>
@@ -181,17 +163,13 @@ export default function ProfileScreen() {
           <View style={styles.profileStatsRow}>
             <View style={styles.profileStatItem}>
               <Ionicons name="ribbon-outline" size={22} color="#4caf50" />
-              <Text style={styles.profileStatValue}>
-                {user.skillPoints || 0}
-              </Text>
+              <Text style={styles.profileStatValue}>{user.skillPoints || 0}</Text>
               <Text style={styles.profileStatLabel}>Skill Points</Text>
             </View>
             <View style={styles.profileStatItem}>
               <Ionicons name="location-outline" size={22} color="#4caf50" />
               <Text style={styles.profileStatValue}>
-                {user.city && user.country
-                  ? `${user.city}, ${user.country}`
-                  : "Unknown Location"}
+                {user.city && user.country ? `${user.city}, ${user.country}` : "Unknown Location"}
               </Text>
               <Text style={styles.profileStatLabel}>Location</Text>
             </View>
@@ -201,24 +179,29 @@ export default function ProfileScreen() {
         <View style={styles.skillsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Skills to Teach</Text>
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate("EditSkillsScreen", {
-                  skills: user.skillsToTeach,
-                  type: "teach",
-                })
-              }
-            >
+            <TouchableOpacity onPress={() => navigation.navigate("EditSkillsScreen", { skills: user.skillsToTeach, type: "teach" })}>
               <Ionicons name="pencil-outline" size={20} color="#6a11cb" />
             </TouchableOpacity>
           </View>
           <View style={styles.skillsPillContainer}>
             {user.skillsToTeach?.length > 0 ? (
-              user.skillsToTeach.map((skill, index) => (
-                <View key={index} style={styles.skillPill}>
-                  <Text style={styles.skillPillText}>{skill}</Text>
-                </View>
-              ))
+user.skillsToTeach.map((skill, index) => (
+  <View
+    key={skill.name + index}
+    style={[styles.skillPill, { flexDirection: "row", alignItems: "center" }]}
+  >
+    <Text style={styles.skillPillText}>{skill.name}</Text>
+    <Ionicons
+      name={skill.verified ? "checkmark-circle" : "help-circle"}
+      size={18}
+      color={skill.verified ? "#4caf50" : "#fbc02d"}
+      style={{ marginLeft: 6 }}
+    />
+  </View>
+))
+
+
+
             ) : (
               <Text>No skills added yet.</Text>
             )}
@@ -228,14 +211,7 @@ export default function ProfileScreen() {
         <View style={styles.skillsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Skills to Learn</Text>
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate("EditSkillsScreen", {
-                  skills: user.skillsToLearn,
-                  type: "learn",
-                })
-              }
-            >
+            <TouchableOpacity onPress={() => navigation.navigate("EditSkillsScreen", { skills: user.skillsToLearn, type: "learn" })}>
               <Ionicons name="pencil-outline" size={20} color="#6a11cb" />
             </TouchableOpacity>
           </View>
@@ -252,18 +228,15 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={async () => {
-            try {
-              await FirebaseAuth.signOut();
-              navigation.replace("StartScreen");
-            } catch (error) {
-              console.error("Error logging out:", error);
-              Alert.alert("Error", "Failed to log out. Please try again.");
-            }
-          }}
-        >
+        <TouchableOpacity style={styles.logoutButton} onPress={async () => {
+          try {
+            await FirebaseAuth.signOut();
+            navigation.replace("StartScreen");
+          } catch (error) {
+            console.error("Error logging out:", error);
+            Alert.alert("Error", "Failed to log out. Please try again.");
+          }
+        }}>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
       </ScrollView>

@@ -14,7 +14,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
 import { doc, setDoc } from "firebase/firestore";
 
-export default function SkillsToTeachScreen({ navigation }) {
+export default function SkillsToTeachScreen({ navigation , route}) {
+    const skillsToTeach = route?.params?.skillsToTeach || [];
+
   const skillCategories = {
     Languages: ["English", "Arabic", "Spanish", "Hebrew"],
     Programming: ["JavaScript", "Python", "HTML", "CSS", "React", "Node.js", "Firebase", "Flutter"],
@@ -79,9 +81,14 @@ export default function SkillsToTeachScreen({ navigation }) {
         return;
       }
 
+      const skillsWithVerification = selectedSkills.map(skill => ({
+        name: skill,
+        verified: false, // <-- Verification flag
+      }));
+
       const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
-      await setDoc(userDocRef, { skillsToTeach: selectedSkills }, { merge: true });
-      navigation.replace("ProfileMakerScreen1");
+      await setDoc(userDocRef, { skillsToTeach: skillsWithVerification }, { merge: true });
+navigation.replace("ProfileMakerScreen1", { skillsToTeach: selectedSkills });
     } catch (error) {
       console.error("Error saving skills to Firestore:", error);
       Alert.alert("Error", "Unable to save skills. Please try again.");
@@ -117,9 +124,7 @@ export default function SkillsToTeachScreen({ navigation }) {
                       style={[styles.skillBlock, isSelected && styles.selectedSkillBlock]}
                       onPress={() => toggleSkill(skill)}
                     >
-                      <Text
-                        style={[styles.skillText, isSelected && styles.selectedSkillText]}
-                      >
+                      <Text style={[styles.skillText, isSelected && styles.selectedSkillText]}>
                         {skill}
                       </Text>
                       {isSelected && <Text style={styles.selectedCheck}>✓</Text>}
@@ -134,6 +139,10 @@ export default function SkillsToTeachScreen({ navigation }) {
 
       <Text style={styles.counterText}>
         Selected: {selectedSkills.length} / {maxSkills}
+      </Text>
+
+      <Text style={styles.verificationNote}>
+        You will be asked to verify your skills later.
       </Text>
 
       <Pressable
@@ -215,8 +224,15 @@ const styles = StyleSheet.create({
   counterText: {
     textAlign: "center",
     fontSize: 14,
-    marginBottom: 12,
+    marginBottom: 8,
     color: "#555",
+  },
+  verificationNote: {
+    textAlign: "center",
+    fontSize: 13,
+    color: "#888",
+    marginBottom: 12,
+    fontStyle: "italic",
   },
   nextButton: {
     backgroundColor: "#4caf50",

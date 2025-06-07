@@ -14,7 +14,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
 import { doc, setDoc } from "firebase/firestore";
 
-export default function SkillsToLearnScreen({ navigation }) {
+export default function SkillsToLearnScreen({ navigation,route }) {
+    const skillsToTeach = route?.params?.skillsToTeach || [];
+
   const skillCategories = {
     Languages: ["English", "Arabic", "Spanish", "Hebrew"],
     Programming: ["JavaScript", "Python", "HTML", "CSS", "React", "Node.js", "Firebase", "Flutter"],
@@ -47,7 +49,12 @@ export default function SkillsToLearnScreen({ navigation }) {
     return filtered;
   }, [searchText]);
 
-  const toggleSkill = (skill) => {
+   const toggleSkill = (skill) => {
+    if (skillsToTeach.includes(skill)) {
+Alert.alert("Nice Choice!", `"${skill}" is already one of the skills you’re teaching. Great job! Let's pick something new to learn.`);
+      return;
+    }
+
     Animated.sequence([
       Animated.timing(scaleAnimations[skill], {
         toValue: 1.05,
@@ -70,6 +77,7 @@ export default function SkillsToLearnScreen({ navigation }) {
       return [...prev, skill];
     });
   };
+
 
   const onNextPressed = async () => {
     try {
