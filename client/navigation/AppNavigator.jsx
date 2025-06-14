@@ -22,7 +22,7 @@ import VoiceCallScreen from "../screens/VoiceCallScreen";
 import RequestsScreen from "../screens/RequestsScreen";
 import EditSkillsScreen from "../screens/EditSkillsScreen";
 import SkillVerificationScreen from "../screens/SkillVerificationScreen";
-
+import HomeContentScreen from "../screens/HomeContentScreen";
 const Stack = createStackNavigator();
 
 export default function AppNavigator() {
@@ -50,7 +50,7 @@ export default function AppNavigator() {
       <Stack.Screen name="RequestsScreen" component={RequestsScreen} />
       <Stack.Screen name="EditSkillsScreen" component={EditSkillsScreen} />
      <Stack.Screen name="SkillVerificationScreen" component={SkillVerificationScreen} />
-
+      <Stack.Screen name="HomeContentScreen" component={HomeContentScreen} />
     </Stack.Navigator>
   );
 }

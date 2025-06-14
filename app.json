@@ -16,6 +16,12 @@
       "eas": {
         "projectId": "c113a607-9a71-4f7e-adcc-cad653228ea0"
       }
+    },
+    "ios": {
+      "bundleIdentifier": "com.anonymous.brainswap",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     }
   }
 }
