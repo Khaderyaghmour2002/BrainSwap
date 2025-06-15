@@ -20,9 +20,10 @@ import {
   where,
 } from 'firebase/firestore';
 import { FirebaseAuth, FirestoreDB } from '../../server/firebaseConfig';
-import { colors } from '../assets/constants';
+import { useNavigation } from '@react-navigation/native';
 
 export default function RequestsScreen() {
+  const navigation = useNavigation();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const currentUser = FirebaseAuth.currentUser;
@@ -43,12 +44,21 @@ export default function RequestsScreen() {
 
       const snapshot = await getDocs(q);
 
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+      // Fetch extra user data (name, photo) for each request
+      const enrichedRequests = await Promise.all(snapshot.docs.map(async (docSnap) => {
+        const request = docSnap.data();
+        const fromUserRef = doc(FirestoreDB, 'users', request.from);
+        const fromUserSnap = await getDoc(fromUserRef);
+        const fromUserData = fromUserSnap.exists() ? fromUserSnap.data() : {};
+        return {
+          id: docSnap.id,
+          ...request,
+          fromName: fromUserData.firstName || 'Unknown',
+          fromPhoto: fromUserData.photoUrl || 'https://via.placeholder.com/64',
+        };
       }));
 
-      setRequests(data);
+      setRequests(enrichedRequests);
     } catch (error) {
       console.error('Error fetching requests:', error);
       Alert.alert('Error', 'Failed to fetch requests.');
@@ -57,82 +67,65 @@ export default function RequestsScreen() {
     }
   };
 
-const handleAccept = async (request) => {
-  try {
-    const currentUid = FirebaseAuth.currentUser.uid;
-    const requesterUid = request.from;
-    const requestId = request.id;
+  const handleAccept = async (request) => {
+    try {
+      const currentUid = currentUser.uid;
+      const requesterUid = request.from;
 
- 
-    // Step 1: Update request status
-    console.log("🟡 Updating request status to 'accepted'...");
-    await updateDoc(doc(FirestoreDB, 'requests', requestId), {
-      status: 'accepted',
-    });
+      await updateDoc(doc(FirestoreDB, 'requests', request.id), { status: 'accepted' });
 
-    // Step 2: Add requester to current user's connections
-    const currentUserRef = doc(FirestoreDB, 'users', currentUid);
-    const currentSnap = await getDoc(currentUserRef);
-    const currentConnections = currentSnap.exists() ? currentSnap.data().connections || [] : [];
+      // Add connections both ways
+      const currentUserRef = doc(FirestoreDB, 'users', currentUid);
+      const requesterRef = doc(FirestoreDB, 'users', requesterUid);
 
-    if (!currentConnections.includes(requesterUid)) {
-      await updateDoc(currentUserRef, {
-        connections: [...currentConnections, requesterUid],
+      await runTransaction(FirestoreDB, async (tx) => {
+        const currentSnap = await tx.get(currentUserRef);
+        const requesterSnap = await tx.get(requesterRef);
+
+        const currentConnections = currentSnap.exists() ? currentSnap.data().connections || [] : [];
+        const requesterConnections = requesterSnap.exists() ? requesterSnap.data().connections || [] : [];
+
+        if (!currentConnections.includes(requesterUid)) {
+          tx.update(currentUserRef, { connections: [...currentConnections, requesterUid] });
+        }
+        if (!requesterConnections.includes(currentUid)) {
+          tx.update(requesterRef, { connections: [...requesterConnections, currentUid] });
+        }
       });
-    } else {
-      console.log("⚠️ Requester already in current user's connections.");
+
+      Alert.alert('✅ Connection accepted', 'Both users are now connected.');
+      fetchRequests();
+    } catch (error) {
+      console.error('❌ Accept error:', error);
+      Alert.alert('❌ Error', error.message || 'Something went wrong');
     }
-
-    // Step 3: Add current user to requester's connections
-    const requesterRef = doc(FirestoreDB, 'users', requesterUid);
-    const requesterSnap = await getDoc(requesterRef);
-    const requesterConnections = requesterSnap.exists() ? requesterSnap.data().connections || [] : [];
-    console.log("🟢 Requester connections before update:", requesterConnections);
-
-    if (!requesterConnections.includes(currentUid)) {
-      await updateDoc(requesterRef, {
-        connections: [...requesterConnections, currentUid],
-      });
-    } else {
-      console.log("⚠️ Current user already in requester's connections.");
-    }
-
-    Alert.alert('✅ Connection accepted', 'Both users are now connected.');
-    fetchRequests();
-  } catch (error) {
-    console.error('❌ Accept error:', error);
-    Alert.alert('❌ Error', error.message || 'Something went wrong');
-  }
-};
-
-
-
-
+  };
 
   const handleReject = async (requestId) => {
-  try {
-    const requestRef = doc(FirestoreDB, 'requests', requestId);
-    await runTransaction(FirestoreDB, async (transaction) => {
-      const requestSnap = await transaction.get(requestRef);
-      if (!requestSnap.exists()) throw new Error('Request does not exist');
-      transaction.update(requestRef, { status: 'rejected' });
-    });
+    try {
+      const requestRef = doc(FirestoreDB, 'requests', requestId);
+      await runTransaction(FirestoreDB, async (transaction) => {
+        const requestSnap = await transaction.get(requestRef);
+        if (!requestSnap.exists()) throw new Error('Request does not exist');
+        transaction.update(requestRef, { status: 'rejected' });
+      });
 
-    fetchRequests(); // Refresh list
-    Alert.alert('Request Rejected');
-  } catch (err) {
-    console.error('Reject error:', err);
-    Alert.alert('Error', 'Failed to reject request.');
-  }
-};
-
+      fetchRequests();
+      Alert.alert('Request Rejected');
+    } catch (err) {
+      console.error('Reject error:', err);
+      Alert.alert('Error', 'Failed to reject request.');
+    }
+  };
 
   const renderRequestItem = ({ item }) => (
     <View style={styles.card}>
-      <Image source={{ uri: item.photoUrl }} style={styles.avatar} />
+      <TouchableOpacity onPress={() => navigation.navigate("ProfileViewScreen", { userId: item.from })}>
+        <Image source={{ uri: item.fromPhoto }} style={styles.avatar} />
+      </TouchableOpacity>
       <View style={styles.infoContainer}>
-        <Text style={styles.name}>{item.firstName}</Text>
-        <Text style={styles.subtitle}>Wants to connect with you</Text>
+        <Text style={styles.name}>{item.fromName}</Text>
+        <Text style={styles.subtitle}>wants to connect with you</Text>
         <View style={styles.buttonsContainer}>
           <TouchableOpacity
             style={[styles.button, { backgroundColor: '#4CAF50' }]}
@@ -152,7 +145,7 @@ const handleAccept = async (request) => {
   );
 
   if (loading) {
-    return <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 100 }} />;
+    return <ActivityIndicator size="large" color="#6a11cb" style={{ marginTop: 100 }} />;
   }
 
   if (requests.length === 0) {
@@ -192,7 +185,7 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fff',
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,

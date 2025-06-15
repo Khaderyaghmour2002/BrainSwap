@@ -1,211 +1,121 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
-  Modal,
-  TextInput,
-} from "react-native";
-import { doc, getDoc, query, collection, where, getDocs, addDoc } from "firebase/firestore";
-import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
+} from 'react-native';
 
-export default function HomeTabContent() {
-  const [userName, setUserName] = useState("User");
-  const [loading, setLoading] = useState(true);
-  const [mutualMatches, setMutualMatches] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [selectedMatch, setSelectedMatch] = useState(null);
-  const [proposedDate, setProposedDate] = useState("");
-  const [proposedTime, setProposedTime] = useState("");
-  const [proposedSkill, setProposedSkill] = useState("");
-
-  useEffect(() => {
-    const fetchData = async () => {
-      console.log("▶ Fetching user data...");
-      try {
-        const currentUser = FirebaseAuth.currentUser;
-        if (!currentUser) {
-          console.warn("⚠ No user logged in");
-          setLoading(false);
-          return;
-        }
-        console.log("✅ Logged-in user UID:", currentUser.uid);
-
-        const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (!userDocSnap.exists()) {
-          console.warn("⚠ User document does not exist");
-          setLoading(false);
-          return;
-        }
-        const userData = userDocSnap.data();
-        console.log("✅ User data:", userData);
-
-        setUserName(userData.firstName || "User");
-
-        const myTeach = userData.skillsToTeach?.map(s => s.name) || [];
-        const myLearn = userData.skillsToLearn || [];
-
-        console.log("📝 My teach skills:", myTeach);
-        console.log("📝 My learn skills:", myLearn);
-
-        const connectionsQuery = query(
-          collection(FirestoreDB, "connections"),
-          where("users", "array-contains", currentUser.uid)
-        );
-        const connectionsSnap = await getDocs(connectionsQuery);
-
-        const connectionIds = [];
-        connectionsSnap.forEach(docSnap => {
-          const users = docSnap.data().users;
-          const otherUid = users.find(uid => uid !== currentUser.uid);
-          if (otherUid) connectionIds.push(otherUid);
-        });
-
-        console.log("🔗 Connection UIDs:", connectionIds);
-
-        const mutual = [];
-        for (const connId of connectionIds) {
-          console.log("📌 Checking connection:", connId);
-          const connDocSnap = await getDoc(doc(FirestoreDB, "users", connId));
-          if (!connDocSnap.exists()) {
-            console.warn(`⚠ Connection user ${connId} not found`);
-            continue;
-          }
-          const connData = connDocSnap.data();
-          console.log(`✅ Data for ${connId}:`, connData);
-
-          const connTeach = connData.skillsToTeach?.map(s => s.name) || [];
-          const connLearn = connData.skillsToLearn || [];
-
-          const teachesWhatILearn = connTeach.some(skill => myLearn.includes(skill));
-          const wantsWhatITeach = connLearn.some(skill => myTeach.includes(skill));
-
-          if (teachesWhatILearn && wantsWhatITeach) {
-            mutual.push({
-              id: connId,
-              name: connData.firstName || "Unknown",
-              teaches: connTeach.filter(skill => myLearn.includes(skill)),
-              wants: connLearn.filter(skill => myTeach.includes(skill)),
-            });
-          }
-        }
-
-        console.log("🎯 Mutual matches found:", mutual);
-        setMutualMatches(mutual);
-      } catch (err) {
-        console.error("❌ Error during fetchData:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  const submitProposal = async () => {
-    console.log("▶ Submit proposal with values:", { proposedDate, proposedTime, proposedSkill, selectedMatch });
-
-    if (!proposedDate || !proposedTime || !proposedSkill) {
-      Alert.alert("Missing info", "Please fill all fields.");
-      return;
-    }
-
-    try {
-      const currentUser = FirebaseAuth.currentUser;
-      if (!currentUser) {
-        Alert.alert("Error", "User not logged in.");
-        return;
-      }
-
-      await addDoc(collection(FirestoreDB, "proposals"), {
-        from: currentUser.uid,
-        to: selectedMatch.id,
-        date: proposedDate,
-        time: proposedTime,
-        skill: proposedSkill,
-        createdAt: new Date(),
-      });
-
-      console.log("✅ Proposal saved to Firestore");
-      Alert.alert("Proposal Sent", `Session proposed with ${selectedMatch.name}.`);
-      setShowModal(false);
-      setProposedDate("");
-      setProposedTime("");
-      setProposedSkill("");
-    } catch (err) {
-      console.error("❌ Error saving proposal:", err);
-      Alert.alert("Error", "Failed to send proposal. Try again.");
-    }
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <Text>Loading...</Text>
-      </View>
-    );
-  }
+export default function HomeContentScreen() {
+  const [userName] = useState('John');
+  const [upcomingSessions] = useState([
+    { id: 1, date: '2025-07-14', time: '16:00', skill: 'JavaScript', type: 'Teaching', with: 'Maria' },
+    { id: 2, date: '2025-07-20', time: '14:00', skill: 'English', type: 'Learning', with: 'Ali' },
+  ]);
+  const [mutualOpportunities] = useState([
+    { id: 1, name: 'Sara', teaches: ['Figma'], wants: ['English'] },
+    { id: 2, name: 'Omar', teaches: ['Photoshop'], wants: ['JavaScript'] },
+  ]);
+  const [skills] = useState({
+    teaching: ['JavaScript', 'English'],
+    learning: ['Figma', 'Guitar'],
+  });
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.greeting}>Hello, {userName}!</Text>
+      <Text style={styles.header}>👋 Hello, <Text style={styles.highlight}>{userName}</Text>!</Text>
+
+      {/* Upcoming Sessions */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>📅 Upcoming Sessions</Text>
+        {upcomingSessions.length === 0 ? (
+          <Text style={styles.placeholder}>No sessions scheduled.</Text>
+        ) : (
+          upcomingSessions.map(session => (
+            <View key={session.id} style={styles.card}>
+              <Text style={styles.cardText}>
+                <Text style={styles.bold}>{session.date} {session.time}</Text> | {session.type}: <Text style={styles.skill}>{session.skill}</Text> with {session.with}
+              </Text>
+            </View>
+          ))
+        )}
       </View>
 
+      {/* Mutual Opportunities */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Mutual Skill Exchanges</Text>
-        {mutualMatches.length === 0 ? (
-          <Text>No mutual exchanges found yet.</Text>
+        <Text style={styles.sectionTitle}>🔗 Mutual Opportunities</Text>
+        {mutualOpportunities.length === 0 ? (
+          <Text style={styles.placeholder}>No mutual matches found.</Text>
         ) : (
-          mutualMatches.map((m, i) => (
-            <View key={i} style={styles.matchCard}>
-              <Text>{m.name}</Text>
-              <Text>They can teach: {m.teaches.join(", ")}</Text>
-              <Text>They want: {m.wants.join(", ")}</Text>
-              <TouchableOpacity onPress={() => {
-                console.log("▶ Opening proposal modal for:", m);
-                setSelectedMatch(m);
-                setShowModal(true);
-              }}>
-                <Text style={{ color: "blue" }}>Propose Exchange</Text>
+          mutualOpportunities.map(match => (
+            <View key={match.id} style={styles.card}>
+              <Text style={styles.cardText}>
+                <Text style={styles.bold}>{match.name}</Text> | Teaches: <Text style={styles.skill}>{match.teaches.join(', ')}</Text> | Wants: <Text style={styles.skill}>{match.wants.join(', ')}</Text>
+              </Text>
+              <TouchableOpacity style={styles.button}>
+                <Text style={styles.buttonText}>✨ Propose Exchange</Text>
               </TouchableOpacity>
             </View>
           ))
         )}
       </View>
 
-      <Modal visible={showModal} transparent>
-        <View style={styles.center}>
-          <View style={styles.modal}>
-            <Text>Propose to {selectedMatch?.name}</Text>
-            <TextInput placeholder="Date" value={proposedDate} onChangeText={setProposedDate} style={styles.input}/>
-            <TextInput placeholder="Time" value={proposedTime} onChangeText={setProposedTime} style={styles.input}/>
-            <TextInput placeholder="Skill" value={proposedSkill} onChangeText={setProposedSkill} style={styles.input}/>
-            <TouchableOpacity onPress={submitProposal}>
-              <Text style={{ color: "green" }}>Submit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowModal(false)}>
-              <Text style={{ color: "red" }}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+  
+
+   
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  header: { alignItems: "center", marginBottom: 20 },
-  greeting: { fontSize: 24, fontWeight: "bold" },
-  section: { marginTop: 10 },
-  sectionTitle: { fontSize: 18, fontWeight: "bold" },
-  matchCard: { padding: 10, borderWidth: 1, borderColor: "#ccc", borderRadius: 8, marginTop: 8 },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  modal: { backgroundColor: "#fff", padding: 20, borderRadius: 10, width: "80%" },
-  input: { borderWidth: 1, borderColor: "#ccc", padding: 8, marginTop: 8, borderRadius: 6 },
+  container: { flex: 1, padding: 20, backgroundColor: '#f0f4f8' },
+  header: { fontSize: 28, paddingTop: 15, fontWeight: '700', marginBottom: 20, color: '#333' },
+  highlight: { color: '#6a11cb' },
+  section: { marginBottom: 24 },
+  sectionTitle: { fontSize: 20, fontWeight: '600', marginBottom: 10, color: '#444' },
+  placeholder: { color: '#999', fontStyle: 'italic' },
+  card: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 10,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  cardText: { fontSize: 14, color: '#333' },
+  bold: { fontWeight: '600' },
+  skill: { color: '#6a11cb', fontWeight: '500' },
+  skillSummary: { marginBottom: 4, fontSize: 14 },
+  button: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  buttonText: { color: '#fff', fontWeight: '600' },
+  smallButton: {
+    backgroundColor: '#2196F3',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  smallButtonText: { color: '#fff', fontSize: 12 },
+  actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 },
+  actionButton: {
+    flex: 1,
+    backgroundColor: '#6a11cb',
+    paddingVertical: 12,
+    marginHorizontal: 4,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  actionButtonText: { color: '#fff', fontWeight: '700' },
 });

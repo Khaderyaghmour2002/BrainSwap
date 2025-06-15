@@ -14,9 +14,9 @@ import {
   doc,
   getDoc,
   getDocs,
-  query,
   where,
   setDoc,
+  query,
   serverTimestamp,
 } from "firebase/firestore";
 import { FirestoreDB, FirebaseAuth } from "../../server/firebaseConfig";
@@ -32,7 +32,7 @@ export default function MatchingScreen() {
     fetchMatches();
   }, []);
 
-const fetchMatches = async () => {
+ const fetchMatches = async () => {
   try {
     const currentUser = FirebaseAuth.currentUser;
     if (!currentUser) return;
@@ -41,21 +41,21 @@ const fetchMatches = async () => {
     const userData = userDoc.data();
     const userConnections = new Set(userData.connections || []);
 
-    const matchesQuery = query(
-      collection(FirestoreDB, "users"),
-      where("skillsToTeach", "array-contains-any", userData.skillsToLearn || [])
-    );
+    const allUsersSnap = await getDocs(collection(FirestoreDB, "users"));
 
-    const querySnapshot = await getDocs(matchesQuery);
-    const fetched = querySnapshot.docs
-      .filter((doc) =>
-        doc.id !== currentUser.uid && !userConnections.has(doc.id)
-      )
-      .map((doc) => ({ id: doc.id, ...doc.data() }));
+    const fetched = allUsersSnap.docs
+      .filter(docSnap => {
+        if (docSnap.id === currentUser.uid) return false;
+        if (userConnections.has(docSnap.id)) return false;
+        const data = docSnap.data();
+        const teachNames = (data.skillsToTeach || []).map(s => s.name);
+        return teachNames.some(skill => (userData.skillsToLearn || []).includes(skill));
+      })
+      .map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
     setMatches(fetched);
 
-    // Sent requests
+    // Fetch sent pending requests
     const sentSnapshot = await getDocs(
       query(
         collection(FirestoreDB, "requests"),
@@ -63,9 +63,9 @@ const fetchMatches = async () => {
         where("status", "==", "pending")
       )
     );
-    const sentTo = new Set(sentSnapshot.docs.map((doc) => doc.data().to));
+    const sentTo = new Set(sentSnapshot.docs.map(d => d.data().to));
 
-    // Received requests
+    // Fetch received pending requests
     const receivedSnapshot = await getDocs(
       query(
         collection(FirestoreDB, "requests"),
@@ -73,9 +73,10 @@ const fetchMatches = async () => {
         where("status", "==", "pending")
       )
     );
-    const receivedFrom = new Set(receivedSnapshot.docs.map((doc) => doc.data().from));
+    const receivedFrom = new Set(receivedSnapshot.docs.map(d => d.data().from));
 
     setPendingRequests({ sent: sentTo, received: receivedFrom });
+
   } catch (err) {
     console.error("Error fetching matches:", err);
     Alert.alert("Error", "Failed to fetch matches.");
@@ -101,9 +102,9 @@ const fetchMatches = async () => {
         timestamp: serverTimestamp(),
       });
 
-      setPendingRequests((prev) => ({
+      setPendingRequests(prev => ({
         ...prev,
-        sent: new Set(prev.sent).add(targetUser.id),
+        sent: new Set(prev.sent).add(targetUser.id)
       }));
 
       Alert.alert("Request Sent", `You have sent a request to ${targetUser.firstName}.`);
@@ -114,48 +115,51 @@ const fetchMatches = async () => {
   };
 
   const renderMatchItem = ({ item }) => {
-    const isSentPending = pendingRequests.sent.has(item.id);
-    const isReceivedPending = pendingRequests.received.has(item.id);
+  const isSentPending = pendingRequests.sent.has(item.id);
+  const isReceivedPending = pendingRequests.received.has(item.id);
 
-    return (
-      <View style={styles.matchCard}>
-        <Image source={{ uri: item.photoUrl }} style={styles.profileImage} />
-        <View style={styles.matchContent}>
-          <Text style={styles.name}>{item.firstName}</Text>
-          <Text style={styles.skills}>
-            🎓 Teaching: {item.skillsToTeach.join(", ")}
-          </Text>
-          <View style={styles.actionsRow}>
+  const teachNames = (item.skillsToTeach || []).map(s => s.name).join(", ");
+
+  return (
+    <View style={styles.matchCard}>
+      <TouchableOpacity onPress={() => navigation.navigate("ProfileViewScreen", { userId: item.id })}>
+        <Image source={{ uri: item.photoUrl || "https://via.placeholder.com/64" }} style={styles.profileImage} />
+      </TouchableOpacity>
+
+      <View style={styles.matchContent}>
+        <Text style={styles.name}>{item.firstName}</Text>
+        <Text style={styles.skills}>🎓 Teaching: {teachNames || "N/A"}</Text>
+
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={styles.viewButton}
+            onPress={() => navigation.navigate("ProfileViewScreen", { userId: item.id })}
+          >
+            <Text style={styles.buttonText}>👀 View</Text>
+          </TouchableOpacity>
+
+          {isSentPending ? (
+            <View style={styles.pendingButton}>
+              <Text style={styles.buttonText}>⏳ Pending</Text>
+            </View>
+          ) : isReceivedPending ? (
+            <View style={styles.pendingButton}>
+              <Text style={styles.buttonText}>💬 Respond</Text>
+            </View>
+          ) : (
             <TouchableOpacity
-              style={styles.viewButton}
-              onPress={() =>
-                navigation.navigate("ProfileViewScreen", { userId: item.id })
-              }
+              style={styles.requestButton}
+              onPress={() => sendRequest(item)}
             >
-              <Text style={styles.buttonText}>👀 View</Text>
+              <Text style={styles.buttonText}>🤝 Connect</Text>
             </TouchableOpacity>
-
-            {isSentPending ? (
-              <View style={styles.pendingButton}>
-                <Text style={styles.buttonText}>⏳ Pending</Text>
-              </View>
-            ) : isReceivedPending ? (
-              <View style={styles.pendingButton}>
-                <Text style={styles.buttonText}>💬 Respond</Text>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.requestButton}
-                onPress={() => sendRequest(item)}
-              >
-                <Text style={styles.buttonText}>🤝 Connect</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          )}
         </View>
       </View>
-    );
-  };
+    </View>
+  );
+};
+
 
   if (loading) {
     return (

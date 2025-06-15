@@ -13,7 +13,6 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import {
   collection,
@@ -22,7 +21,6 @@ import {
   where,
   onSnapshot,
   setDoc,
-  deleteDoc,
   orderBy,
   getDocs,
   getDoc,
@@ -49,27 +47,32 @@ const ChatsScreen = ({ setUnreadCount = () => {} }) => {
       orderBy('lastUpdated', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      setChats(snapshot.docs);
-      const photoUpdates = {};
+    const unsubscribe = onSnapshot(
+      q,
+      async (snapshot) => {
+        console.log('📥 Chats snapshot received:', snapshot.size);
+        setChats(snapshot.docs);
+        const photoUpdates = {};
 
-      for (const chat of snapshot.docs) {
-        const otherId = chat.data().participants.find(id => id !== currentUser.uid);
-        if (otherId && !userPhotos[otherId]) {
-          const userSnap = await getDoc(doc(FirestoreDB, 'users', otherId));
-          if (userSnap.exists()) {
-            photoUpdates[otherId] = userSnap.data().photoUrl;
+        for (const chat of snapshot.docs) {
+          const otherId = chat.data().participants.find(id => id !== currentUser.uid);
+          if (otherId && !userPhotos[otherId]) {
+            const userSnap = await getDoc(doc(FirestoreDB, 'users', otherId));
+            if (userSnap.exists()) {
+              photoUpdates[otherId] = userSnap.data().photoUrl;
+            }
           }
         }
-      }
 
-      setUserPhotos(prev => ({ ...prev, ...photoUpdates }));
-      setLoading(false);
-    }, (error) => {
-      console.error('Error fetching chats:', error);
-      setChats([]);
-      setLoading(false);
-    });
+        setUserPhotos(prev => ({ ...prev, ...photoUpdates }));
+        setLoading(false);
+      },
+      (error) => {
+        console.error('❌ Error fetching chats:', error);
+        setChats([]);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, []);
@@ -78,14 +81,17 @@ const ChatsScreen = ({ setUnreadCount = () => {} }) => {
     const fetchConnections = async () => {
       if (!currentUser) return;
       try {
+        console.log('🔍 Fetching connections...');
         const userDoc = await getDoc(doc(FirestoreDB, 'users', currentUser.uid));
-        const connectionIds = userDoc.data()?.connections || [];
+        const connectionIds = [...(userDoc.data()?.connections || [])];
 
-        const connectionChunks = [];
-        while (connectionIds.length) connectionChunks.push(connectionIds.splice(0, 10));
+        console.log('✅ Connection IDs:', connectionIds);
+
+        const chunks = [];
+        while (connectionIds.length) chunks.push(connectionIds.splice(0, 10));
 
         const allConnections = [];
-        for (const chunk of connectionChunks) {
+        for (const chunk of chunks) {
           const q = query(collection(FirestoreDB, 'users'), where('__name__', 'in', chunk));
           const snapshot = await getDocs(q);
           snapshot.forEach(docSnap => {
@@ -94,9 +100,10 @@ const ChatsScreen = ({ setUnreadCount = () => {} }) => {
             }
           });
         }
+        console.log('✅ Connections loaded:', allConnections.length);
         setConnections(allConnections);
       } catch (err) {
-        console.error('Error loading connections:', err);
+        console.error('❌ Error loading connections:', err);
       }
     };
 
@@ -116,40 +123,55 @@ const ChatsScreen = ({ setUnreadCount = () => {} }) => {
   };
 
   const startNewChat = async (contact) => {
-    const ids = [currentUser.uid, contact.id].sort();
-    const chatId = ids.join('_');
-    const chatRef = doc(FirestoreDB, 'chats', chatId);
-    const chatSnap = await getDoc(chatRef);
+    try {
+      console.log('👉 Contact pressed:', contact);
 
-    if (!chatSnap.exists()) {
-      await setDoc(chatRef, {
-        participants: ids,
-        userInfo: [
-          {
-            id: currentUser.uid,
-            name: currentUser.displayName || 'You',
-            photoUrl: currentUser.photoURL,
-          },
-          {
-            id: contact.id,
-            name: contact.firstName || 'User',
-            photoUrl: contact.photoUrl,
-          },
-        ],
-        messages: [],
-        lastUpdated: Date.now(),
+      const ids = [currentUser.uid, contact.id].sort();
+      const chatId = ids.join('_');
+      const chatRef = doc(FirestoreDB, 'chats', chatId);
+      const chatSnap = await getDoc(chatRef);
+
+      if (!chatSnap.exists()) {
+        const newChatData = {
+          participants: ids,
+          userInfo: [
+            {
+              id: currentUser.uid,
+              name: currentUser.displayName || 'You',
+              photoUrl: currentUser.photoURL || '',
+            },
+            {
+              id: contact.id,
+              name: contact.firstName || 'User',
+              photoUrl: contact.photoUrl || '',
+            },
+          ],
+          messages: [],
+          lastUpdated: Date.now(),
+        };
+
+        console.log('🚀 Attempting to create new chat:', newChatData);
+
+        await setDoc(chatRef, newChatData);
+
+        console.log('✅ New chat created');
+      } else {
+        console.log('ℹ Chat already exists');
+      }
+
+      setModalVisible(false);
+      navigation.navigate('NewChatScreen', {
+        user: {
+          id: contact.id,
+          firstName: contact.firstName,
+          photoUrl: contact.photoUrl,
+          status: contact.status || 'Available',
+        },
       });
+    } catch (err) {
+      console.error('❌ Error in startNewChat:', err);
+      Alert.alert('Error', err.message || 'Could not start chat');
     }
-
-    setModalVisible(false);
-    navigation.navigate('NewChatScreen', {
-      user: {
-        id: contact.id,
-        firstName: contact.firstName,
-        photoUrl: contact.photoUrl,
-        status: contact.status || 'Available',
-      },
-    });
   };
 
   return (

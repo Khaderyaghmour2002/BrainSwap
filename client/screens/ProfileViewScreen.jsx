@@ -78,7 +78,7 @@ export default function ProfileViewScreen({ route }) {
       <View style={styles.skillsSection}>
         <Text style={styles.sectionTitle}>Skills to Teach</Text>
         <Text style={styles.sectionText}>
-          {user.skillsToTeach?.length > 0 ? user.skillsToTeach.join(", ") : "No skills added."}
+          {user.skillsToTeach?.length > 0 ? user.skillsToTeach.map(s => s.name).join(", ") : "No skills added."}
         </Text>
       </View>
 
