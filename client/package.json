@@ -16,8 +16,7 @@
       "axios": "^1.4.0"
     },
     "devDependencies": {
-      "@babel/core": "^7.22.9",
-      "react-native-cli": "^2.0.1"
+      "@babel/core": "^7.22.9"
     }
   }
   

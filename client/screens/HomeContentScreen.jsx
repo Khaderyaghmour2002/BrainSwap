@@ -1,32 +1,127 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
+import { collection, doc, getDoc, getDocs, query, where, setDoc, serverTimestamp } from 'firebase/firestore';
+import { FirebaseAuth, FirestoreDB } from '../../server/firebaseConfig';
 
 export default function HomeContentScreen() {
-  const [userName] = useState('John');
-  const [upcomingSessions] = useState([
-    { id: 1, date: '2025-07-14', time: '16:00', skill: 'JavaScript', type: 'Teaching', with: 'Maria' },
-    { id: 2, date: '2025-07-20', time: '14:00', skill: 'English', type: 'Learning', with: 'Ali' },
-  ]);
-  const [mutualOpportunities] = useState([
-    { id: 1, name: 'Sara', teaches: ['Figma'], wants: ['English'] },
-    { id: 2, name: 'Omar', teaches: ['Photoshop'], wants: ['JavaScript'] },
-  ]);
-  const [skills] = useState({
-    teaching: ['JavaScript', 'English'],
-    learning: ['Figma', 'Guitar'],
-  });
+  const [userName, setUserName] = useState('User');
+  const [upcomingSessions, setUpcomingSessions] = useState([]);
+  const [mutualOpportunities, setMutualOpportunities] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const currentUser = FirebaseAuth.currentUser;
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchData();
+    } else {
+      Alert.alert('Error', 'User not authenticated');
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const userRef = doc(FirestoreDB, 'users', currentUser.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (!userSnap.exists()) {
+        Alert.alert('Error', 'User data not found');
+        setLoading(false);
+        return;
+      }
+
+      const userData = userSnap.data();
+      setUserName(userData.firstName || 'User');
+
+      // Fetch sessions
+      const sessionsQ = query(
+        collection(FirestoreDB, 'sessions'),
+        where('participants', 'array-contains', currentUser.uid)
+      );
+      const sessionsSnap = await getDocs(sessionsQ);
+      const sessions = sessionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setUpcomingSessions(sessions);
+
+      // Fetch mutual opportunities
+      const connectionsIds = userData.connections || [];
+      const usersSnap = await getDocs(collection(FirestoreDB, 'users'));
+
+      const mutuals = usersSnap.docs
+        .filter(docSnap => {
+          const data = docSnap.data();
+          if (docSnap.id === currentUser.uid || connectionsIds.includes(docSnap.id)) return false;
+
+          const teaches = (data.skillsToTeach || []).map(s => s.name);
+          const wants = data.skillsToLearn || [];
+          const myTeaches = (userData.skillsToTeach || []).map(s => s.name);
+          const myWants = userData.skillsToLearn || [];
+
+          const teachesWhatILearn = teaches.some(skill => myWants.includes(skill));
+          const wantsWhatITeach = wants.some(skill => myTeaches.includes(skill));
+
+          return teachesWhatILearn && wantsWhatITeach;
+        })
+        .map(docSnap => ({
+          id: docSnap.id,
+          name: docSnap.data().firstName,
+          teaches: (docSnap.data().skillsToTeach || []).map(s => s.name),
+          wants: docSnap.data().skillsToLearn || [],
+        }));
+
+      setMutualOpportunities(mutuals);
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      Alert.alert('Error', 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+const proposeExchange = async (targetUserId) => {
+  try {
+    const requestId = `${currentUser.uid}_${targetUserId}`;
+    const requestRef = doc(FirestoreDB, 'requests', requestId);
+
+    await setDoc(requestRef, {
+      from: currentUser.uid,
+      to: targetUserId,
+      status: 'pending',
+      timestamp: serverTimestamp(),
+    });
+
+    // Remove the user from mutualOpportunities
+    setMutualOpportunities(prev => prev.filter(item => item.id !== targetUserId));
+
+    Alert.alert('✅ Request Sent', 'Your exchange proposal was sent.');
+  } catch (err) {
+    console.error('Error sending request:', err);
+    Alert.alert('❌ Error', 'Failed to send exchange request.');
+  }
+};
+
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#6a11cb" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.header}>👋 Hello, <Text style={styles.highlight}>{userName}</Text>!</Text>
 
-      {/* Upcoming Sessions */}
+      {/* Sessions */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>📅 Upcoming Sessions</Text>
         {upcomingSessions.length === 0 ? (
@@ -42,7 +137,7 @@ export default function HomeContentScreen() {
         )}
       </View>
 
-      {/* Mutual Opportunities */}
+      {/* Mutuals */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>🔗 Mutual Opportunities</Text>
         {mutualOpportunities.length === 0 ? (
@@ -53,23 +148,20 @@ export default function HomeContentScreen() {
               <Text style={styles.cardText}>
                 <Text style={styles.bold}>{match.name}</Text> | Teaches: <Text style={styles.skill}>{match.teaches.join(', ')}</Text> | Wants: <Text style={styles.skill}>{match.wants.join(', ')}</Text>
               </Text>
-              <TouchableOpacity style={styles.button}>
+              <TouchableOpacity style={styles.button} onPress={() => proposeExchange(match.id)}>
                 <Text style={styles.buttonText}>✨ Propose Exchange</Text>
               </TouchableOpacity>
             </View>
           ))
         )}
       </View>
-
-  
-
-   
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#f0f4f8' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { fontSize: 28, paddingTop: 15, fontWeight: '700', marginBottom: 20, color: '#333' },
   highlight: { color: '#6a11cb' },
   section: { marginBottom: 24 },
@@ -89,7 +181,6 @@ const styles = StyleSheet.create({
   cardText: { fontSize: 14, color: '#333' },
   bold: { fontWeight: '600' },
   skill: { color: '#6a11cb', fontWeight: '500' },
-  skillSummary: { marginBottom: 4, fontSize: 14 },
   button: {
     backgroundColor: '#4CAF50',
     paddingVertical: 8,
@@ -99,23 +190,4 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   buttonText: { color: '#fff', fontWeight: '600' },
-  smallButton: {
-    backgroundColor: '#2196F3',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-  },
-  smallButtonText: { color: '#fff', fontSize: 12 },
-  actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 },
-  actionButton: {
-    flex: 1,
-    backgroundColor: '#6a11cb',
-    paddingVertical: 12,
-    marginHorizontal: 4,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  actionButtonText: { color: '#fff', fontWeight: '700' },
 });
