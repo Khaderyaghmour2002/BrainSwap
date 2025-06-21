@@ -38,6 +38,34 @@ const ChatsScreen = ({ setUnreadCount = () => {} }) => {
   const currentUser = FirebaseAuth.currentUser;
   const [userPhotos, setUserPhotos] = useState({});
 
+ const createSession = async () => {
+  if (!selectedTeachSkill || !selectedLearnSkill) {
+    Alert.alert('Error', 'Please select both a teaching and learning skill.');
+    return;
+  }
+
+  try {
+    await addDoc(collection(FirestoreDB, 'sessions'), {
+      from: currentUser.uid,
+      to: user.id,
+      teaching: selectedTeachSkill,
+      learning: selectedLearnSkill,
+      date: sessionDate.toISOString(),
+      duration: selectedDuration,
+        status: 'pending',
+      createdAt: serverTimestamp(),
+    });
+    Alert.alert('✅ Session set successfully!');
+    setSessionModalVisible(false);
+    setSelectedTeachSkill('');
+    setSelectedLearnSkill('');
+    setSelectedDuration('30 min'); // Reset to default if you want
+  } catch (err) {
+    console.error('❌ Error creating session:', err);
+    Alert.alert('Error', 'Failed to create session');
+  }
+};
+
   useEffect(() => {
     if (!currentUser) return;
 
