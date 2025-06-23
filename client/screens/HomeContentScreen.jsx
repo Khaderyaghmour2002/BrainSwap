@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, FlatList, Image, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Modal, Alert, RefreshControl
+  View, Text, FlatList, Image, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Modal, Alert, RefreshControl, KeyboardAvoidingView, ScrollView, Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -9,7 +9,7 @@ import { collection, addDoc, getDocs, serverTimestamp, query, orderBy } from 'fi
 import { ref, uploadBytesResumable, getDownloadURL, getStorage } from 'firebase/storage';
 import { FirestoreDB, FirebaseAuth } from '../../server/firebaseConfig';
 import { colors } from '../assets/constants';
-import moment from 'moment';  // Make sure to add moment.js or dayjs
+import moment from 'moment';
 
 export default function HomeContentScreen() {
   const [posts, setPosts] = useState([]);
@@ -121,20 +121,24 @@ export default function HomeContentScreen() {
 
   const renderPost = ({ item }) => (
     <View style={styles.postContainer}>
-      <View style={styles.postHeader}>
-        <Image source={{ uri: item.photoUrl }} style={styles.avatar} />
-        <View>
-          <Text style={styles.userName}>{item.userName}</Text>
-          {item.createdAt && (
-            <Text style={styles.timestamp}>
-              {moment(item.createdAt.toDate()).fromNow()}
-            </Text>
-          )}
-        </View>
-      </View>
-      <Image source={{ uri: item.imageUrl }} style={styles.postImage} />
-      <Text style={styles.caption}>{item.caption}</Text>
+  <View style={styles.postHeader}>
+    <Image source={{ uri: item.photoUrl }} style={styles.avatar} />
+    <View>
+      <Text style={styles.userName}>{item.userName}</Text>
+      {item.createdAt && (
+        <Text style={styles.timestamp}>
+          {moment(item.createdAt.toDate()).fromNow()}
+        </Text>
+      )}
     </View>
+  </View>
+
+  {/* Caption above image */}
+  <Text style={styles.caption}>{item.caption}</Text>
+
+  <Image source={{ uri: item.imageUrl }} style={styles.postImage} />
+</View>
+
   );
 
   return (
@@ -157,42 +161,63 @@ export default function HomeContentScreen() {
         contentContainerStyle={{ paddingBottom: 100 }}
       />
 
-      <Modal visible={modalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <TouchableOpacity style={styles.modalClose} onPress={() => {
-              Alert.alert("Discard post?", "Are you sure you want to cancel?", [
-                { text: "No" },
-                {
-                  text: "Yes", onPress: () => {
-                    setModalVisible(false);
-                    setSelectedImage(null);
-                    setCaption('');
-                  }
-                }
-              ])
-            }}>
-              <Ionicons name="close" size={24} color="#555" />
-            </TouchableOpacity>
+      <Modal visible={modalVisible} animationType="slide">
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+            <View style={styles.fullModal}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.alert("Discard post?", "Are you sure you want to cancel?", [
+                      { text: "No" },
+                      {
+                        text: "Yes",
+                        onPress: () => {
+                          setModalVisible(false);
+                          setSelectedImage(null);
+                          setCaption('');
+                        }
+                      }
+                    ])
+                  }}
+                >
+                  <Ionicons name="arrow-back" size={28} color="#fff" />
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Create Post</Text>
+                <View style={{ width: 28 }} /> 
+              </View>
 
-            {selectedImage && (
-              <Image source={{ uri: selectedImage }} style={{ width: '100%', height: 250, borderRadius: 10, marginBottom: 15 }} />
-            )}
-            <TextInput
-              placeholder="Write a caption..."
-              value={caption}
-              onChangeText={setCaption}
-              style={styles.input}
-            />
-            <TouchableOpacity
-              onPress={uploadPost}
-              style={styles.uploadButton}
-              disabled={uploading}
-            >
-              {uploading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '600' }}>Upload</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
+              {selectedImage && (
+                <Image source={{ uri: selectedImage }} style={styles.fullImage} />
+              )}
+
+              <View style={styles.captionContainer}>
+                <TextInput
+                  placeholder="Write a caption..."
+                  value={caption}
+                  onChangeText={setCaption}
+                  style={styles.captionInputFull}
+                  placeholderTextColor="#aaa"
+                  multiline
+                />
+                <TouchableOpacity
+                  style={styles.uploadButtonFull}
+                  onPress={uploadPost}
+                  disabled={uploading}
+                >
+                  {uploading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Post</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -223,9 +248,48 @@ const styles = StyleSheet.create({
   timestamp: { marginLeft: 8, fontSize: 12, color: '#777' },
   postImage: { width: '100%', height: 300 },
   caption: { padding: 10, fontSize: 14, color: '#333' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#fff', padding: 20, borderRadius: 12, width: '90%' },
-  input: { borderColor: '#ccc', borderWidth: 1, padding: 10, borderRadius: 8, marginBottom: 20 },
-  uploadButton: { backgroundColor: colors.primary, padding: 14, borderRadius: 10, alignItems: 'center' },
-  modalClose: { position: 'absolute', right: 10, top: 10, zIndex: 1 },
+  fullModal: {
+    flex: 1,
+    backgroundColor: '#000',
+    paddingTop: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  fullImage: {
+    width: '100%',
+    height: '60%',
+    resizeMode: 'cover',
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  captionContainer: {
+    flex: 1,
+    backgroundColor: '#111',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+  },
+  captionInputFull: {
+    color: '#fff',
+    fontSize: 16,
+    flex: 1,
+    textAlignVertical: 'top',
+  },
+  uploadButtonFull: {
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 10,
+  },
 });
