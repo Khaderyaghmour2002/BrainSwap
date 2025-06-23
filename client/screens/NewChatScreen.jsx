@@ -58,7 +58,6 @@ const NewChatScreen = ({ route, navigation }) => {
         console.error('Error fetching user data:', err);
       }
     };
-
     fetchUsersData();
   }, []);
 
@@ -66,14 +65,16 @@ const NewChatScreen = ({ route, navigation }) => {
     const unsub = onSnapshot(doc(FirestoreDB, 'chats', chatId), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        const msgs = data.messages.map((msg) => ({
-          ...msg,
-          createdAt: msg.createdAt.toDate ? msg.createdAt.toDate() : new Date(msg.createdAt),
-          user: {
-            ...msg.user,
-            avatar: msg.user._id === currentUser.uid ? currentUser.photoURL : user.photoUrl,
-          },
-        }));
+        const msgs = data.messages
+          .map((msg) => ({
+            ...msg,
+            createdAt: msg.createdAt.toDate ? msg.createdAt.toDate() : new Date(msg.createdAt),
+            user: {
+              ...msg.user,
+              avatar: msg.user._id === currentUser.uid ? currentUser.photoURL : user.photoUrl,
+            },
+          }))
+          .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
         setMessages(msgs);
       }
     });
@@ -95,10 +96,21 @@ const NewChatScreen = ({ route, navigation }) => {
     const prevMessages = docSnap.exists() ? docSnap.data().messages || [] : [];
     const updated = GiftedChat.append(prevMessages, newMessages);
 
+    // Remove duplicates
+    const uniqueMessages = updated.reduce((acc, msg) => {
+      if (!acc.find(m => m._id === msg._id)) {
+        acc.push(msg);
+      }
+      return acc;
+    }, []);
+
+    // Sort by createdAt
+    uniqueMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
     await setDoc(
       docRef,
       {
-        messages: updated.map((msg) => ({
+        messages: uniqueMessages.map((msg) => ({
           ...msg,
           createdAt: msg.createdAt || new Date(),
         })),
@@ -169,9 +181,7 @@ const NewChatScreen = ({ route, navigation }) => {
 
   const handleSessionResponse = async (sessionId, isConfirmed) => {
     try {
-      await setDoc(doc(FirestoreDB, 'sessions', sessionId), {
-        confirmed: isConfirmed
-      }, { merge: true });
+      await setDoc(doc(FirestoreDB, 'sessions', sessionId), { confirmed: isConfirmed }, { merge: true });
 
       const chatRef = doc(FirestoreDB, 'chats', chatId);
       const chatSnap = await getDoc(chatRef);
@@ -194,7 +204,6 @@ const NewChatScreen = ({ route, navigation }) => {
       }, { merge: true });
 
       alert(isConfirmed ? 'Session confirmed!' : 'Session cancelled!');
-
     } catch (err) {
       console.error('Error updating session:', err);
       alert('Error updating session');
@@ -209,7 +218,6 @@ const NewChatScreen = ({ route, navigation }) => {
         </TouchableOpacity>
         <Image source={{ uri: user.photoUrl }} style={styles.headerAvatar} />
         <Text style={styles.headerTitle}>{user.firstName}</Text>
-
         <TouchableOpacity
           style={styles.headerIcon}
           onPress={() => {
@@ -230,7 +238,6 @@ const NewChatScreen = ({ route, navigation }) => {
         >
           <Ionicons name="calendar-outline" size={24} color="#fff" />
         </TouchableOpacity>
-
         <TouchableOpacity style={styles.headerIcon} onPress={() => navigation.navigate('VoiceCallScreen', { user })}>
           <Ionicons name="call-outline" size={24} color="#fff" />
         </TouchableOpacity>
@@ -282,34 +289,48 @@ const NewChatScreen = ({ route, navigation }) => {
             </TouchableOpacity>
           </View>
         )}
-        renderCustomView={({ currentMessage }) => {
-          if (currentMessage.pendingConfirmation && currentMessage.user._id !== currentUser.uid) {
-            return (
-              <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginTop: 4 }}>
-                <TouchableOpacity
-                  onPress={() => handleSessionResponse(currentMessage.sessionId, true)}
-                  style={{ backgroundColor: 'green', padding: 6, borderRadius: 6 }}
-                >
-                  <Text style={{ color: '#fff' }}>Confirm</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleSessionResponse(currentMessage.sessionId, false)}
-                  style={{ backgroundColor: 'red', padding: 6, borderRadius: 6 }}
-                >
-                  <Text style={{ color: '#fff' }}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            );
-          }
-          if (currentMessage.confirmationResult) {
-            return (
-              <Text style={{ color: currentMessage.confirmationResult.includes('Confirmed') ? 'green' : 'red', marginTop: 4 }}>
-                {currentMessage.confirmationResult}
-              </Text>
-            );
-          }
-          return null;
-        }}
+renderCustomView={({ currentMessage }) => {
+  if (currentMessage.pendingConfirmation && currentMessage.user._id !== currentUser.uid) {
+    return (
+      <View style={{ alignItems: 'center', marginTop: 4 }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => handleSessionResponse(currentMessage.sessionId, true)}
+            style={{ backgroundColor: 'green', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>Confirm</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => handleSessionResponse(currentMessage.sessionId, false)}
+            style={{ backgroundColor: 'red', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  if (currentMessage.confirmationResult) {
+    return (
+      <View style={{ alignItems: 'center', marginTop: 4 }}>
+        <Text
+          style={{
+            color: currentMessage.confirmationResult.includes('Confirmed') ? 'green' : 'red',
+            fontWeight: '600'
+          }}
+        >
+          {currentMessage.confirmationResult}
+        </Text>
+      </View>
+    );
+  }
+
+  return null;
+}}
+
+
+
       />
     </View>
   );

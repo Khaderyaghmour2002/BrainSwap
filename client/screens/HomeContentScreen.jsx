@@ -1,193 +1,231 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
+  View, Text, FlatList, Image, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Modal, Alert, RefreshControl
 } from 'react-native';
-import { collection, doc, getDoc, getDocs, query, where, setDoc, serverTimestamp } from 'firebase/firestore';
-import { FirebaseAuth, FirestoreDB } from '../../server/firebaseConfig';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import uuid from 'react-native-uuid';
+import { collection, addDoc, getDocs, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL, getStorage } from 'firebase/storage';
+import { FirestoreDB, FirebaseAuth } from '../../server/firebaseConfig';
+import { colors } from '../assets/constants';
+import moment from 'moment';  // Make sure to add moment.js or dayjs
 
 export default function HomeContentScreen() {
-  const [userName, setUserName] = useState('User');
-  const [upcomingSessions, setUpcomingSessions] = useState([]);
-  const [mutualOpportunities, setMutualOpportunities] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [caption, setCaption] = useState('');
+  const [uploading, setUploading] = useState(false);
 
-  const currentUser = FirebaseAuth.currentUser;
-
-  useEffect(() => {
-    if (currentUser) {
-      fetchData();
-    } else {
-      Alert.alert('Error', 'User not authenticated');
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchData = async () => {
+  const fetchPosts = async () => {
     try {
-      const userRef = doc(FirestoreDB, 'users', currentUser.uid);
-      const userSnap = await getDoc(userRef);
-
-      if (!userSnap.exists()) {
-        Alert.alert('Error', 'User data not found');
-        setLoading(false);
-        return;
-      }
-
-      const userData = userSnap.data();
-      setUserName(userData.firstName || 'User');
-
-      // Fetch sessions
-      const sessionsQ = query(
-        collection(FirestoreDB, 'sessions'),
-        where('participants', 'array-contains', currentUser.uid)
-      );
-      const sessionsSnap = await getDocs(sessionsQ);
-      const sessions = sessionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setUpcomingSessions(sessions);
-
-      // Fetch mutual opportunities
-      const connectionsIds = userData.connections || [];
-      const usersSnap = await getDocs(collection(FirestoreDB, 'users'));
-
-      const mutuals = usersSnap.docs
-        .filter(docSnap => {
-          const data = docSnap.data();
-          if (docSnap.id === currentUser.uid || connectionsIds.includes(docSnap.id)) return false;
-
-          const teaches = (data.skillsToTeach || []).map(s => s.name);
-          const wants = data.skillsToLearn || [];
-          const myTeaches = (userData.skillsToTeach || []).map(s => s.name);
-          const myWants = userData.skillsToLearn || [];
-
-          const teachesWhatILearn = teaches.some(skill => myWants.includes(skill));
-          const wantsWhatITeach = wants.some(skill => myTeaches.includes(skill));
-
-          return teachesWhatILearn && wantsWhatITeach;
-        })
-        .map(docSnap => ({
-          id: docSnap.id,
-          name: docSnap.data().firstName,
-          teaches: (docSnap.data().skillsToTeach || []).map(s => s.name),
-          wants: docSnap.data().skillsToLearn || [],
-        }));
-
-      setMutualOpportunities(mutuals);
+      const q = query(collection(FirestoreDB, 'posts'), orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setPosts(data);
     } catch (err) {
-      console.error('Error fetching data:', err);
-      Alert.alert('Error', 'Failed to load data');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching posts:', err);
     }
   };
 
-const proposeExchange = async (targetUserId) => {
-  try {
-    const requestId = `${currentUser.uid}_${targetUserId}`;
-    const requestRef = doc(FirestoreDB, 'requests', requestId);
+  useEffect(() => {
+    fetchPosts();
+  }, []);
 
-    await setDoc(requestRef, {
-      from: currentUser.uid,
-      to: targetUserId,
-      status: 'pending',
-      timestamp: serverTimestamp(),
-    });
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchPosts();
+    setRefreshing(false);
+  };
 
-    // Remove the user from mutualOpportunities
-    setMutualOpportunities(prev => prev.filter(item => item.id !== targetUserId));
+  const pickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 1,
+        allowsEditing: true,
+      });
 
-    Alert.alert('✅ Request Sent', 'Your exchange proposal was sent.');
-  } catch (err) {
-    console.error('Error sending request:', err);
-    Alert.alert('❌ Error', 'Failed to send exchange request.');
-  }
-};
+      if (!result.canceled) {
+        setSelectedImage(result.assets[0].uri);
+        setModalVisible(true);
+      }
+    } catch (err) {
+      console.error('Image picker error:', err);
+    }
+  };
 
+  const uploadPost = async () => {
+    if (!selectedImage) {
+      Alert.alert('Error', 'No image selected.');
+      return;
+    }
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#6a11cb" />
+    try {
+      setUploading(true);
+      const currentUser = FirebaseAuth.currentUser;
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be logged in to upload.');
+        setUploading(false);
+        return;
+      }
+
+      const blob = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.onload = () => resolve(xhr.response);
+        xhr.onerror = () => reject(new TypeError('Network request failed'));
+        xhr.responseType = 'blob';
+        xhr.open('GET', selectedImage, true);
+        xhr.send(null);
+      });
+
+      const fileId = uuid.v4();
+      const fileRef = ref(getStorage(), `posts/${currentUser.uid}/${fileId}.jpg`);
+      const uploadTask = uploadBytesResumable(fileRef, blob);
+
+      uploadTask.on(
+        'state_changed',
+        null,
+        (err) => {
+          console.error('Upload failed:', err);
+          setUploading(false);
+        },
+        async () => {
+          const downloadURL = await getDownloadURL(fileRef);
+          await addDoc(collection(FirestoreDB, 'posts'), {
+            userId: currentUser.uid,
+            userName: currentUser.displayName || 'User',
+            photoUrl: currentUser.photoURL,
+            imageUrl: downloadURL,
+            caption: caption || '',
+            createdAt: serverTimestamp(),
+          });
+          setUploading(false);
+          setModalVisible(false);
+          setSelectedImage(null);
+          setCaption('');
+          await fetchPosts();
+        }
+      );
+    } catch (err) {
+      console.error('Error uploading post:', err);
+      setUploading(false);
+    }
+  };
+
+  const renderPost = ({ item }) => (
+    <View style={styles.postContainer}>
+      <View style={styles.postHeader}>
+        <Image source={{ uri: item.photoUrl }} style={styles.avatar} />
+        <View>
+          <Text style={styles.userName}>{item.userName}</Text>
+          {item.createdAt && (
+            <Text style={styles.timestamp}>
+              {moment(item.createdAt.toDate()).fromNow()}
+            </Text>
+          )}
+        </View>
       </View>
-    );
-  }
+      <Image source={{ uri: item.imageUrl }} style={styles.postImage} />
+      <Text style={styles.caption}>{item.caption}</Text>
+    </View>
+  );
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.header}>👋 Hello, <Text style={styles.highlight}>{userName}</Text>!</Text>
-
-      {/* Sessions */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>📅 Upcoming Sessions</Text>
-        {upcomingSessions.length === 0 ? (
-          <Text style={styles.placeholder}>No sessions scheduled.</Text>
-        ) : (
-          upcomingSessions.map(session => (
-            <View key={session.id} style={styles.card}>
-              <Text style={styles.cardText}>
-                <Text style={styles.bold}>{session.date} {session.time}</Text> | {session.type}: <Text style={styles.skill}>{session.skill}</Text> with {session.with}
-              </Text>
-            </View>
-          ))
-        )}
+    <View style={{ flex: 1, backgroundColor: '#fff' }}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>SkillGram</Text>
+        <TouchableOpacity onPress={pickImage}>
+          <Ionicons name="add-circle-outline" size={30} color="#fff" />
+        </TouchableOpacity>
       </View>
 
-      {/* Mutuals */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>🔗 Mutual Opportunities</Text>
-        {mutualOpportunities.length === 0 ? (
-          <Text style={styles.placeholder}>No mutual matches found.</Text>
-        ) : (
-          mutualOpportunities.map(match => (
-            <View key={match.id} style={styles.card}>
-              <Text style={styles.cardText}>
-                <Text style={styles.bold}>{match.name}</Text> | Teaches: <Text style={styles.skill}>{match.teaches.join(', ')}</Text> | Wants: <Text style={styles.skill}>{match.wants.join(', ')}</Text>
-              </Text>
-              <TouchableOpacity style={styles.button} onPress={() => proposeExchange(match.id)}>
-                <Text style={styles.buttonText}>✨ Propose Exchange</Text>
-              </TouchableOpacity>
-            </View>
-          ))
-        )}
-      </View>
-    </ScrollView>
+      {loading && <ActivityIndicator size="large" color={colors.teal} style={{ marginTop: 10 }} />}
+
+      <FlatList
+        data={posts}
+        keyExtractor={(item) => item.id}
+        renderItem={renderPost}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 20, color: '#999' }}>No posts yet. Be the first to share!</Text>}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      />
+
+      <Modal visible={modalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <TouchableOpacity style={styles.modalClose} onPress={() => {
+              Alert.alert("Discard post?", "Are you sure you want to cancel?", [
+                { text: "No" },
+                {
+                  text: "Yes", onPress: () => {
+                    setModalVisible(false);
+                    setSelectedImage(null);
+                    setCaption('');
+                  }
+                }
+              ])
+            }}>
+              <Ionicons name="close" size={24} color="#555" />
+            </TouchableOpacity>
+
+            {selectedImage && (
+              <Image source={{ uri: selectedImage }} style={{ width: '100%', height: 250, borderRadius: 10, marginBottom: 15 }} />
+            )}
+            <TextInput
+              placeholder="Write a caption..."
+              value={caption}
+              onChangeText={setCaption}
+              style={styles.input}
+            />
+            <TouchableOpacity
+              onPress={uploadPost}
+              style={styles.uploadButton}
+              disabled={uploading}
+            >
+              {uploading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '600' }}>Upload</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#f0f4f8' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { fontSize: 28, paddingTop: 15, fontWeight: '700', marginBottom: 20, color: '#333' },
-  highlight: { color: '#6a11cb' },
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 20, fontWeight: '600', marginBottom: 10, color: '#444' },
-  placeholder: { color: '#999', fontStyle: 'italic' },
-  card: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
+  header: {
+    backgroundColor: colors.primary,
+    paddingTop: 50,
+    paddingBottom: 15,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  cardText: { fontSize: 14, color: '#333' },
-  bold: { fontWeight: '600' },
-  skill: { color: '#6a11cb', fontWeight: '500' },
-  button: {
-    backgroundColor: '#4CAF50',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+  headerTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
+  postContainer: {
+    marginVertical: 10,
+    backgroundColor: '#fafafa',
     borderRadius: 8,
-    alignSelf: 'flex-start',
-    marginTop: 8,
+    overflow: 'hidden',
+    marginHorizontal: 10,
+    elevation: 2,
   },
-  buttonText: { color: '#fff', fontWeight: '600' },
+  postHeader: { flexDirection: 'row', alignItems: 'center', padding: 10 },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#ccc' },
+  userName: { marginLeft: 8, fontWeight: '600', fontSize: 16 },
+  timestamp: { marginLeft: 8, fontSize: 12, color: '#777' },
+  postImage: { width: '100%', height: 300 },
+  caption: { padding: 10, fontSize: 14, color: '#333' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#fff', padding: 20, borderRadius: 12, width: '90%' },
+  input: { borderColor: '#ccc', borderWidth: 1, padding: 10, borderRadius: 8, marginBottom: 20 },
+  uploadButton: { backgroundColor: colors.primary, padding: 14, borderRadius: 10, alignItems: 'center' },
+  modalClose: { position: 'absolute', right: 10, top: 10, zIndex: 1 },
 });
