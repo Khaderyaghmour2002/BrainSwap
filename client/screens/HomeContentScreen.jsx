@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, FlatList, Image, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Modal, Alert, RefreshControl, KeyboardAvoidingView, ScrollView, Platform
+  View, Text, FlatList, Image, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Modal,
+  Alert, RefreshControl, KeyboardAvoidingView, ScrollView, Platform, Linking
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import uuid from 'react-native-uuid';
 import { collection, addDoc, getDocs, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, getStorage } from 'firebase/storage';
@@ -17,6 +19,8 @@ export default function HomeContentScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [fileName, setFileName] = useState('');
   const [caption, setCaption] = useState('');
   const [uploading, setUploading] = useState(false);
 
@@ -61,9 +65,22 @@ export default function HomeContentScreen() {
     }
   };
 
+  const pickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: '*/*' });
+      if (!result.canceled) {
+        setSelectedFile(result.assets[0].uri);
+        setFileName(result.assets[0].name);
+        setModalVisible(true);
+      }
+    } catch (err) {
+      console.error('Document picker error:', err);
+    }
+  };
+
   const uploadPost = async () => {
-    if (!selectedImage) {
-      Alert.alert('Error', 'No image selected.');
+    if (!selectedImage && !selectedFile) {
+      Alert.alert('Error', 'No file or image selected.');
       return;
     }
 
@@ -76,17 +93,19 @@ export default function HomeContentScreen() {
         return;
       }
 
+      const uri = selectedImage || selectedFile;
       const blob = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.onload = () => resolve(xhr.response);
         xhr.onerror = () => reject(new TypeError('Network request failed'));
         xhr.responseType = 'blob';
-        xhr.open('GET', selectedImage, true);
+        xhr.open('GET', uri, true);
         xhr.send(null);
       });
 
       const fileId = uuid.v4();
-      const fileRef = ref(getStorage(), `posts/${currentUser.uid}/${fileId}.jpg`);
+      const ext = selectedFile ? fileName?.split('.').pop() : 'jpg';
+      const fileRef = ref(getStorage(), `posts/${currentUser.uid}/${fileId}.${ext}`);
       const uploadTask = uploadBytesResumable(fileRef, blob);
 
       uploadTask.on(
@@ -102,13 +121,17 @@ export default function HomeContentScreen() {
             userId: currentUser.uid,
             userName: currentUser.displayName || 'User',
             photoUrl: currentUser.photoURL,
-            imageUrl: downloadURL,
+            imageUrl: selectedImage ? downloadURL : '',
+            fileUrl: selectedFile ? downloadURL : '',
+            fileName: selectedFile ? fileName : '',
             caption: caption || '',
             createdAt: serverTimestamp(),
           });
           setUploading(false);
           setModalVisible(false);
           setSelectedImage(null);
+          setSelectedFile(null);
+          setFileName('');
           setCaption('');
           await fetchPosts();
         }
@@ -121,33 +144,45 @@ export default function HomeContentScreen() {
 
   const renderPost = ({ item }) => (
     <View style={styles.postContainer}>
-  <View style={styles.postHeader}>
-    <Image source={{ uri: item.photoUrl }} style={styles.avatar} />
-    <View>
-      <Text style={styles.userName}>{item.userName}</Text>
-      {item.createdAt && (
-        <Text style={styles.timestamp}>
-          {moment(item.createdAt.toDate()).fromNow()}
-        </Text>
-      )}
+      <View style={styles.postHeader}>
+        <Image source={{ uri: item.photoUrl }} style={styles.avatar} />
+        <View>
+          <Text style={styles.userName}>{item.userName}</Text>
+          {item.createdAt && (
+            <Text style={styles.timestamp}>{moment(item.createdAt.toDate()).fromNow()}</Text>
+          )}
+        </View>
+      </View>
+
+      {item.caption ? <Text style={styles.caption}>{item.caption}</Text> : null}
+      {item.imageUrl ? (
+        <Image source={{ uri: item.imageUrl }} style={styles.postImage} />
+      ) : null}
+
+      {item.fileUrl ? (
+        <View style={styles.fileContainer}>
+          <Ionicons name="document-text-outline" size={24} color={colors.primary} />
+          <Text style={styles.fileName}>{item.fileName}</Text>
+          <TouchableOpacity onPress={() => Linking.openURL(item.fileUrl)}>
+            <Text style={styles.openFile}>Open</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </View>
-  </View>
-
-  {/* Caption above image */}
-  <Text style={styles.caption}>{item.caption}</Text>
-
-  <Image source={{ uri: item.imageUrl }} style={styles.postImage} />
-</View>
-
   );
 
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>SkillGram</Text>
-        <TouchableOpacity onPress={pickImage}>
-          <Ionicons name="add-circle-outline" size={30} color="#fff" />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Brain Swap</Text>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity onPress={pickImage}>
+            <Ionicons name="image-outline" size={28} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={pickDocument}>
+            <Ionicons name="attach-outline" size={28} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading && <ActivityIndicator size="large" color={colors.teal} style={{ marginTop: 10 }} />}
@@ -162,10 +197,7 @@ export default function HomeContentScreen() {
       />
 
       <Modal visible={modalVisible} animationType="slide">
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
             <View style={styles.fullModal}>
               <View style={styles.modalHeader}>
@@ -178,6 +210,8 @@ export default function HomeContentScreen() {
                         onPress: () => {
                           setModalVisible(false);
                           setSelectedImage(null);
+                          setSelectedFile(null);
+                          setFileName('');
                           setCaption('');
                         }
                       }
@@ -187,12 +221,16 @@ export default function HomeContentScreen() {
                   <Ionicons name="arrow-back" size={28} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>Create Post</Text>
-                <View style={{ width: 28 }} /> 
+                <View style={{ width: 28 }} />
               </View>
 
-              {selectedImage && (
-                <Image source={{ uri: selectedImage }} style={styles.fullImage} />
-              )}
+              {selectedImage && <Image source={{ uri: selectedImage }} style={styles.fullImage} />}
+              {fileName ? (
+                <View style={styles.filePreview}>
+                  <Ionicons name="document-outline" size={20} color="#fff" />
+                  <Text style={{ color: '#fff', marginLeft: 6 }}>{fileName}</Text>
+                </View>
+              ) : null}
 
               <View style={styles.captionContainer}>
                 <TextInput
@@ -203,11 +241,7 @@ export default function HomeContentScreen() {
                   placeholderTextColor="#aaa"
                   multiline
                 />
-                <TouchableOpacity
-                  style={styles.uploadButtonFull}
-                  onPress={uploadPost}
-                  disabled={uploading}
-                >
+                <TouchableOpacity style={styles.uploadButtonFull} onPress={uploadPost} disabled={uploading}>
                   {uploading ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
@@ -248,6 +282,25 @@ const styles = StyleSheet.create({
   timestamp: { marginLeft: 8, fontSize: 12, color: '#777' },
   postImage: { width: '100%', height: 300 },
   caption: { padding: 10, fontSize: 14, color: '#333' },
+  fileContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    backgroundColor: '#f4f4f4',
+  },
+  fileName: {
+    marginLeft: 8,
+    fontSize: 14,
+    flex: 1,
+    color: '#333',
+  },
+  openFile: {
+    color: colors.teal,
+    fontWeight: '600',
+  },
   fullModal: {
     flex: 1,
     backgroundColor: '#000',
@@ -291,5 +344,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 10,
+  },
+  filePreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 16,
+    marginBottom: 10,
   },
 });
