@@ -66,7 +66,7 @@ const handleSave = async () => {
     });
 
     Alert.alert("✅ Success", "Skills updated successfully!");
-navigation.navigate("ProfileScreen", { refreshSkills: true });
+    navigation.goBack();
   } catch (err) {
     console.error("Failed to update skills:", err);
     Alert.alert("❌ Error", "Failed to update skills. Please try again.");
