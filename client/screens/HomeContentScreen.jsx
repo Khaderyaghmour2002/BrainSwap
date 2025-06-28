@@ -7,13 +7,15 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import uuid from 'react-native-uuid';
-import { collection, addDoc, getDocs, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, serverTimestamp, query, orderBy,where,doc,setDoc,getDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, getStorage } from 'firebase/storage';
 import { FirestoreDB, FirebaseAuth } from '../../server/firebaseConfig';
 import { colors } from '../assets/constants';
 import moment from 'moment';
+import { useNavigation } from "@react-navigation/native";
 
 export default function HomeContentScreen() {
+  const navigation = useNavigation();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -23,24 +25,138 @@ export default function HomeContentScreen() {
   const [fileName, setFileName] = useState('');
   const [caption, setCaption] = useState('');
   const [uploading, setUploading] = useState(false);
+const [pendingRequests, setPendingRequests] = useState({ sent: new Set(), received: new Set() });
+const [connections, setConnections] = useState(new Set());
+const [userData, setUserData] = useState(null);
+const [userConnections, setUserConnections] = useState(new Set());
+const fetchCurrentUserData = async () => {
+  try {
+    const currentUser = FirebaseAuth.currentUser;
+    if (!currentUser) return;
+
+    const docRef = doc(FirestoreDB, 'users', currentUser.uid);
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      setUserData(data);
+      setUserConnections(new Set(data.connections || []));
+    }
+  } catch (err) {
+    console.error('Error fetching current user data:', err);
+  }
+};
 
   const fetchPosts = async () => {
-    try {
-      const q = query(collection(FirestoreDB, 'posts'), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map(doc => ({
+  try {
+    const currentUser = FirebaseAuth.currentUser;
+    if (!currentUser) return;
+
+    const q = query(collection(FirestoreDB, 'posts'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    const data = snapshot.docs
+      .map(doc => ({
         id: doc.id,
-        ...doc.data()
-      }));
-      setPosts(data);
-    } catch (err) {
-      console.error('Error fetching posts:', err);
-    }
-  };
+        ...doc.data(),
+      }))
+      .filter(post => post.userId !== currentUser.uid); // 👈 filter out own posts
+
+    setPosts(data);
+  } catch (err) {
+    console.error('Error fetching posts:', err);
+  }
+};
+fetchCurrentUserData 
+useEffect(() => {
+  fetchPosts();
+  fetchCurrentUserData(); 
+}, []);
+
+const fetchConnections = async () => {
+  try {
+    const currentUser = FirebaseAuth.currentUser;
+    if (!currentUser) return;
+
+    const snapshot = await getDocs(
+      collection(FirestoreDB, `users/${currentUser.uid}/connections`)
+    );
+    const ids = snapshot.docs.map(doc => doc.id); // Assuming each doc is the connected user's UID
+    setConnections(new Set(ids));
+  } catch (err) {
+    console.error("Error fetching connections:", err);
+  }
+};
 
   useEffect(() => {
     fetchPosts();
   }, []);
+const fetchRequests = async () => {
+  try {
+    const currentUser = FirebaseAuth.currentUser;
+    if (!currentUser) return;
+
+    const sentSnapshot = await getDocs(
+      query(
+        collection(FirestoreDB, "requests"),
+        where("from", "==", currentUser.uid),
+        where("status", "==", "pending")
+      )
+    );
+    const sentTo = new Set(sentSnapshot.docs.map(d => d.data().to));
+
+    const receivedSnapshot = await getDocs(
+      query(
+        collection(FirestoreDB, "requests"),
+        where("to", "==", currentUser.uid),
+        where("status", "==", "pending")
+      )
+    );
+    const receivedFrom = new Set(receivedSnapshot.docs.map(d => d.data().from));
+
+    setPendingRequests({ sent: sentTo, received: receivedFrom });
+  } catch (err) {
+    console.error("Error fetching requests:", err);
+  }
+};
+
+const sendRequest = async (targetUser) => {
+  const currentUser = FirebaseAuth.currentUser;
+  if (!currentUser || !targetUser) return;
+
+  if (pendingRequests.received.has(targetUser.id)) {
+    Alert.alert("Already Requested", `${targetUser.firstName || targetUser.userName} already sent you a request.`);
+    return;
+  }
+
+  try {
+    const requestRef = doc(FirestoreDB, "requests", `${currentUser.uid}_${targetUser.id}`);
+    await setDoc(requestRef, {
+      from: currentUser.uid,
+      to: targetUser.id,
+      status: "pending",
+      timestamp: serverTimestamp(),
+    });
+
+    setPendingRequests(prev => ({
+      ...prev,
+      sent: new Set(prev.sent).add(targetUser.id)
+    }));
+
+    Alert.alert("Request Sent", `You have sent a request to ${targetUser.firstName || targetUser.userName}.`);
+  } catch (err) {
+    console.error("Failed to send request:", err);
+    Alert.alert("Error", "Could not send request. Try again.");
+  }
+};
+
+
+
+
+
+useEffect(() => {
+  fetchPosts();
+  fetchRequests();
+}, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -142,24 +258,86 @@ export default function HomeContentScreen() {
     }
   };
 
-  const renderPost = ({ item }) => (
+const PostCard = ({ item, pendingRequests, userConnections, sendRequest, navigation }) => {
+  const currentUser = FirebaseAuth.currentUser;
+
+  const isSelf = currentUser?.uid === item.userId;
+  const isSentPending = pendingRequests.sent.has(item.userId);
+  const isReceivedPending = pendingRequests.received.has(item.userId);
+  const isConnected = userConnections.has(item.userId);
+
+  const [userPhotoUrl, setUserPhotoUrl] = useState(item.photoUrl || null);
+
+  useEffect(() => {
+    const fetchFallbackPhoto = async () => {
+      if (!item.photoUrl) {
+        try {
+          const userDoc = await getDoc(doc(FirestoreDB, "users", item.userId));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            if (data?.photoUrl) {
+              setUserPhotoUrl(data.photoUrl);
+            }
+          }
+        } catch (err) {
+          console.error("Failed to fetch user photo for post:", err);
+        }
+      }
+    };
+    fetchFallbackPhoto();
+  }, [item.userId]);
+
+  return (
     <View style={styles.postContainer}>
       <View style={styles.postHeader}>
-        <Image source={{ uri: item.photoUrl }} style={styles.avatar} />
-        <View>
-          <Text style={styles.userName}>{item.userName}</Text>
-          {item.createdAt && (
-            <Text style={styles.timestamp}>{moment(item.createdAt.toDate()).fromNow()}</Text>
-          )}
+        <View style={styles.headerLeft}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("ProfileViewScreen", { userId: item.userId })}
+          >
+            <Image
+              source={{ uri: userPhotoUrl || "https://via.placeholder.com/150" }}
+              style={styles.avatar}
+            />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.userName}>{item.userName}</Text>
+            {item.createdAt && (
+              <Text style={styles.timestamp}>
+                {moment(item.createdAt.toDate()).fromNow()}
+              </Text>
+            )}
+          </View>
         </View>
+
+        {!isSelf && !isConnected && (
+          isSentPending ? (
+            <View style={styles.pendingButtonSmall}>
+              <Text style={styles.buttonTextSmall}>⏳</Text>
+            </View>
+          ) : isReceivedPending ? (
+            <View style={styles.pendingButtonSmall}>
+              <Text style={styles.buttonTextSmall}>💬</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.connectIconButton}
+              onPress={() =>
+                sendRequest({ id: item.userId, firstName: item.userName })
+              }
+            >
+              <Text style={styles.buttonTextSmall}>🤝</Text>
+            </TouchableOpacity>
+          )
+        )}
       </View>
 
       {item.caption ? <Text style={styles.caption}>{item.caption}</Text> : null}
-      {item.imageUrl ? (
-        <Image source={{ uri: item.imageUrl }} style={styles.postImage} />
-      ) : null}
 
-      {item.fileUrl ? (
+      {item.imageUrl && (
+        <Image source={{ uri: item.imageUrl }} style={styles.postImage} />
+      )}
+
+      {item.fileUrl && (
         <View style={styles.fileContainer}>
           <Ionicons name="document-text-outline" size={24} color={colors.primary} />
           <Text style={styles.fileName}>{item.fileName}</Text>
@@ -167,9 +345,18 @@ export default function HomeContentScreen() {
             <Text style={styles.openFile}>Open</Text>
           </TouchableOpacity>
         </View>
-      ) : null}
+      )}
     </View>
   );
+};
+
+
+
+
+
+
+
+
 
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
@@ -188,13 +375,20 @@ export default function HomeContentScreen() {
       {loading && <ActivityIndicator size="large" color={colors.teal} style={{ marginTop: 10 }} />}
 
       <FlatList
-        data={posts}
-        keyExtractor={(item) => item.id}
-        renderItem={renderPost}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 20, color: '#999' }}>No posts yet. Be the first to share!</Text>}
-        contentContainerStyle={{ paddingBottom: 100 }}
-      />
+  data={posts}
+  keyExtractor={(item) => item.id}
+  renderItem={({ item }) => (
+    <PostCard
+      item={item}
+      pendingRequests={pendingRequests}
+      userConnections={userConnections}
+      sendRequest={sendRequest}
+      navigation={navigation}
+    />
+  )}
+  contentContainerStyle={{ paddingBottom: 100 }}
+/>
+
 
       <Modal visible={modalVisible} animationType="slide">
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -351,4 +545,90 @@ const styles = StyleSheet.create({
     marginLeft: 16,
     marginBottom: 10,
   },
+  actionsRow: {
+  flexDirection: 'row',
+  justifyContent: 'flex-end',
+  padding: 10,
+  gap: 10,
+},
+requestButton: {
+  backgroundColor: colors.primary,
+  paddingVertical: 8,
+  paddingHorizontal: 12,
+  borderRadius: 6,
+},
+pendingButton: {
+  backgroundColor: '#ccc',
+  paddingVertical: 8,
+  paddingHorizontal: 12,
+  borderRadius: 6,
+},
+buttonText: {
+  color: '#fff',
+  fontWeight: '600',
+},
+connectIconButton: {
+  marginRight: 8,
+  backgroundColor: colors.primary,
+  width: 32,
+  height: 32,
+  borderRadius: 16,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+pendingButtonSmall: {
+  marginRight: 8,
+  backgroundColor: '#ccc',
+  width: 32,
+  height: 32,
+  borderRadius: 16,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+buttonTextSmall: {
+  fontSize: 16,
+  color: '#fff',
+},
+postHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: 10,
+},
+headerLeft: {
+  flexDirection: 'row',
+  alignItems: 'center',
+},
+connectIconButton: {
+  backgroundColor: colors.primary,
+  width: 32,
+  height: 32,
+  borderRadius: 16,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+pendingButtonSmall: {
+  backgroundColor: '#ccc',
+  width: 32,
+  height: 32,
+  borderRadius: 16,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+buttonTextSmall: {
+  fontSize: 16,
+  color: '#fff',
+},
+connectButton: {
+  backgroundColor: colors.primary,
+  margin: 10,
+  paddingVertical: 8,
+  borderRadius: 8,
+  alignItems: 'center',
+},
+connectText: {
+  color: '#fff',
+  fontWeight: '600',
+  fontSize: 15,
+},
 });
