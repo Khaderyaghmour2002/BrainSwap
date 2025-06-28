@@ -249,7 +249,14 @@ const handleDeletePost = async (postId) => {
         <View style={styles.skillsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Skills to Teach</Text>
-            <TouchableOpacity onPress={() => navigation.navigate("EditSkillsScreen", { skills: user.skillsToTeach, type: "teach" })}>
+            <TouchableOpacity   onPress={() =>
+    navigation.navigate("EditSkillsScreen", {
+      skills: user.skillsToTeach,
+      type: "teach",
+      skillsToTeach: user.skillsToTeach,
+      skillsToLearn: user.skillsToLearn,
+    })
+  }>
               <Ionicons name="pencil-outline" size={20} color="#6a11cb" />
             </TouchableOpacity>
           </View>
@@ -280,7 +287,15 @@ const handleDeletePost = async (postId) => {
         <View style={styles.skillsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Skills to Learn</Text>
-            <TouchableOpacity onPress={() => navigation.navigate("EditSkillsScreen", { skills: user.skillsToLearn, type: "learn" })}>
+            <TouchableOpacity  onPress={() =>
+    navigation.navigate("EditSkillsScreen", {
+      skills: user.skillsToLearn,
+      type: "learn",
+      skillsToTeach: user.skillsToTeach,
+      skillsToLearn: user.skillsToLearn,
+    })
+  }
+>
               <Ionicons name="pencil-outline" size={20} color="#6a11cb" />
             </TouchableOpacity>
           </View>

@@ -2,74 +2,125 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
+  ScrollView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
 import { doc, updateDoc } from "firebase/firestore";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useNavigation } from "@react-navigation/native";
+import { colors } from "../assets/constants";
 
 export default function EditSkills({ route }) {
   const navigation = useNavigation();
-  const { skills, type } = route.params;
-  const [skillsText, setSkillsText] = useState(skills?.join(", ") || "");
+  const { skills = [], type, skillsToTeach = [], skillsToLearn = [] } = route.params;
 
-  const handleSave = async () => {
-    try {
-      const currentUser = FirebaseAuth.currentUser;
-      const userRef = doc(FirestoreDB, "users", currentUser.uid);
-
-      const updatedSkills = skillsText
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
-
-      await updateDoc(userRef, {
-        [type === "teach" ? "skillsToTeach" : "skillsToLearn"]: updatedSkills,
-      });
-
-      Alert.alert("Success", "Skills updated successfully!");
-      navigation.goBack();
-    } catch (err) {
-      console.error("Failed to update skills:", err);
-      Alert.alert("Error", "Failed to update skills. Please try again.");
-    }
+  const skillCategories = {
+    Languages: ["English", "Arabic", "Spanish", "Hebrew"],
+    Programming: ["JavaScript", "Python", "HTML", "CSS", "React", "Node.js", "Firebase", "Flutter"],
+    Design: ["Photoshop", "Figma", "Canva", "Illustrator"],
+    Music: ["Piano", "Guitar", "Drums", "Oud"],
   };
+
+  const [selectedSkills, setSelectedSkills] = useState(
+    skills.map(skill => typeof skill === "string" ? skill : skill.name)
+  );
+
+  // Get a flat list of skills that should be excluded
+  const excludeList = type === "teach"
+    ? skillsToLearn.map(s => (typeof s === "string" ? s : s.name))
+    : skillsToTeach.map(s => (typeof s === "string" ? s : s.name));
+
+  const toggleSkill = (skill) => {
+    setSelectedSkills((prev) =>
+      prev.includes(skill)
+        ? prev.filter((s) => s !== skill)
+        : [...prev, skill]
+    );
+  };
+
+const handleSave = async () => {
+  try {
+    const currentUser = FirebaseAuth.currentUser;
+    const userRef = doc(FirestoreDB, "users", currentUser.uid);
+
+    let skillsToSave;
+
+    if (type === "teach") {
+      // Map selected skills and retain previous verification status
+      const previousSkills = skills.filter(skill => typeof skill === 'object');
+      skillsToSave = selectedSkills.map((skill) => {
+        const wasVerified = previousSkills.find((s) => s.name === skill)?.verified;
+        return { name: skill, verified: wasVerified ?? false };
+      });
+    } else {
+      // Save as plain strings for 'skillsToLearn'
+      skillsToSave = selectedSkills;
+    }
+
+    await updateDoc(userRef, {
+      [type === "teach" ? "skillsToTeach" : "skillsToLearn"]: skillsToSave,
+    });
+
+    Alert.alert("✅ Success", "Skills updated successfully!");
+navigation.navigate("ProfileScreen", { refreshSkills: true });
+  } catch (err) {
+    console.error("Failed to update skills:", err);
+    Alert.alert("❌ Error", "Failed to update skills. Please try again.");
+  }
+};
 
   return (
     <View style={{ flex: 1, backgroundColor: "#f5f7fa" }}>
-      {/* Header */}
       <LinearGradient colors={["#6a11cb", "#2575fc"]} style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit {type === "teach" ? "Skills to Teach" : "Skills to Learn"}</Text>
+        <Text style={styles.headerTitle}>
+          Edit {type === "teach" ? "Skills to Teach" : "Skills to Learn"}
+        </Text>
       </LinearGradient>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.container}
-      >
-        <Text style={styles.label}>Enter your skills, separated by commas</Text>
-        <TextInput
-          style={styles.input}
-          value={skillsText}
-          onChangeText={setSkillsText}
-          placeholder="e.g. Python, Cooking, Piano"
-          placeholderTextColor="#aaa"
-          multiline
-        />
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.label}>Select Your Skills</Text>
+
+        {Object.entries(skillCategories).map(([category, skills]) => {
+          const filteredSkills = skills.filter(skill => !excludeList.includes(skill));
+          if (filteredSkills.length === 0) return null;
+
+          return (
+            <View key={category} style={styles.categoryBlock}>
+              <Text style={styles.categoryTitle}>{category}</Text>
+              <View style={styles.skillWrap}>
+                {filteredSkills.map((skill) => {
+                  const isSelected = selectedSkills.includes(skill);
+                  return (
+                    <TouchableOpacity
+                      key={skill}
+                      onPress={() => toggleSkill(skill)}
+                      style={[
+                        styles.chip,
+                        { backgroundColor: isSelected ? colors.teal : "#e0f7fa" },
+                      ]}
+                    >
+                      <Text style={{ color: isSelected ? "#fff" : colors.primary }}>
+                        {skill}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
 
         <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
           <Text style={styles.saveButtonText}>Save</Text>
         </TouchableOpacity>
-      </KeyboardAvoidingView>
+      </ScrollView>
     </View>
   );
 }
@@ -95,36 +146,43 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   container: {
-    flex: 1,
     padding: 20,
   },
   label: {
     fontSize: 16,
-    color: "#333",
+    fontWeight: "600",
+    color: "#444",
     marginBottom: 10,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 10,
-    padding: 14,
+  categoryBlock: {
+    marginBottom: 20,
+  },
+  categoryTitle: {
     fontSize: 16,
-    backgroundColor: "#fff",
-    minHeight: 100,
-    textAlignVertical: "top",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    fontWeight: "bold",
+    color: "#444",
+    marginBottom: 8,
+  },
+  skillWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    marginBottom: 10,
   },
   saveButton: {
-    marginTop: 30,
     backgroundColor: "#6a11cb",
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
     elevation: 3,
+    marginBottom: 6,
   },
   saveButtonText: {
     color: "#fff",
