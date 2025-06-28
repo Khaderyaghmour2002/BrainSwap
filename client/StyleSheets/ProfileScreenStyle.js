@@ -217,4 +217,81 @@ export default StyleSheet.create({
     fontSize: 12,
     color: "#555",
   },
+  
+reviewsSection: {
+  marginVertical: 10,
+  padding: 15,
+  backgroundColor: "#fff",
+  borderRadius: 10,
+  width: "90%",
+  elevation: 2,
+},
+
+reviewCard: {
+  backgroundColor: "#f9f9ff",
+  borderRadius: 10,
+  padding: 12,
+  marginBottom: 10,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.05,
+  shadowRadius: 3,
+  elevation: 1,
+},
+
+reviewHeader: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginBottom: 4,
+},
+
+reviewAuthor: {
+  marginLeft: 8,
+  fontSize: 14,
+  fontWeight: "600",
+  color: "#333",
+},
+
+reviewText: {
+  fontSize: 13,
+  color: "#555",
+  lineHeight: 18,
+},
+
+postsSection: {
+  marginVertical: 10,
+  padding: 15,
+  backgroundColor: "#fff",
+  borderRadius: 10,
+  width: "90%",
+  alignSelf: "center",
+  elevation: 2,
+},
+postCard: {
+  backgroundColor: "#f5f5f5",
+  borderRadius: 10,
+  padding: 12,
+  marginTop: 12,
+  elevation: 1,
+},
+postImage: {
+  width: "100%",
+  height: 200,
+  borderRadius: 8,
+  marginTop: 8,
+},
+postCaption: {
+  fontSize: 14,
+  color: "#333",
+},
+postHeaderRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+},
+deleteIcon: {
+  padding: 4,
+},
+
+
 });

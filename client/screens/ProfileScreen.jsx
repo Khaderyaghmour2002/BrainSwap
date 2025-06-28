@@ -11,7 +11,7 @@ import {
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc,collection, query, where, getDocs, orderBy, deleteDoc } from "firebase/firestore";
 import * as ImagePicker from "expo-image-picker";
 import { useNavigation } from "@react-navigation/native";
 import styles from "../StyleSheets/ProfileScreenStyle";
@@ -21,6 +21,8 @@ export default function ProfileScreen() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+const [userPosts, setUserPosts] = useState([]);
+const currentUser = FirebaseAuth.currentUser;
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -45,6 +47,32 @@ export default function ProfileScreen() {
     };
     fetchUserData();
   }, []);
+useEffect(() => {
+  const fetchUserPosts = async () => {
+    if (!currentUser) return;
+
+    try {
+      const postsRef = collection(FirestoreDB, "posts");
+      const q = query(
+        postsRef,
+        where("userId", "==", currentUser.uid),
+        orderBy("createdAt", "desc")
+      );
+      const querySnapshot = await getDocs(q);
+
+      const posts = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setUserPosts(posts);
+    } catch (error) {
+      console.error("Error fetching user posts:", error);
+    }
+  };
+
+  fetchUserPosts();
+}, []);
 
   const choosePhotoOption = () => {
     Alert.alert(
@@ -126,6 +154,31 @@ export default function ProfileScreen() {
       ]
     );
   };
+const confirmDeletePost = (postId) => {
+  Alert.alert(
+    "Delete Post",
+    "Are you sure you want to delete this post?",
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => handleDeletePost(postId),
+      },
+    ]
+  );
+};
+
+const handleDeletePost = async (postId) => {
+  try {
+    await deleteDoc(doc(FirestoreDB, "posts", postId));
+    setUserPosts(prev => prev.filter(post => post.id !== postId));
+    Alert.alert("Deleted", "Your post has been deleted.");
+  } catch (error) {
+    console.error("Error deleting post:", error);
+    Alert.alert("Error", "Failed to delete the post.");
+  }
+};
 
   if (loading) {
     return (
@@ -243,6 +296,53 @@ export default function ProfileScreen() {
             )}
           </View>
         </View>
+<View style={styles.reviewsSection}>
+  <Text style={styles.sectionTitle}>Reviews</Text>
+  {user.reviews && user.reviews.length > 0 ? (
+    user.reviews.map((review, idx) => (
+      <View key={idx} style={styles.reviewCard}>
+        <View style={styles.reviewHeader}>
+          <Ionicons name="person-circle-outline" size={22} color="#6a11cb" />
+          <Text style={styles.reviewAuthor}>{review.reviewerName}</Text>
+        </View>
+        <Text style={styles.reviewText}>{review.comment}</Text>
+      </View>
+    ))
+  ) : (
+    <Text style={styles.sectionText}>No reviews yet.</Text>
+  )}
+</View>
+
+<View style={styles.postsSection}>
+  <View style={styles.sectionHeader}>
+    <Text style={styles.sectionTitle}>My Posts</Text>
+  </View>
+
+  {userPosts.length === 0 ? (
+    <Text style={{ color: '#777', marginTop: 10, textAlign: 'center' }}>
+      You haven’t posted anything yet.
+    </Text>
+  ) : (
+    userPosts.map((post, index) => (
+      <View key={index} style={styles.postCard}>
+        <View style={styles.postHeaderRow}>
+          {post.caption && <Text style={styles.postCaption}>{post.caption}</Text>}
+          <TouchableOpacity
+            onPress={() => confirmDeletePost(post.id)}
+            style={styles.deleteIcon}
+          >
+            <Ionicons name="trash-outline" size={20} color="#d32f2f" />
+          </TouchableOpacity>
+        </View>
+        {post.imageUrl && (
+          <Image source={{ uri: post.imageUrl }} style={styles.postImage} />
+        )}
+      </View>
+    ))
+  )}
+</View>
+
+
 
         <TouchableOpacity style={styles.logoutButton} onPress={async () => {
           try {
