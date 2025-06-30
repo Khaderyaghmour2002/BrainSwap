@@ -24,6 +24,7 @@ import EditSkillsScreen from "../screens/EditSkillsScreen";
 import SkillVerificationScreen from "../screens/SkillVerificationScreen";
 import HomeContentScreen from "../screens/HomeContentScreen";
 import SessionCreationScreen from "../screens/SessionCreationScreen";
+import ProfileViewScreen1 from "../screens/ProfileViewScreen1";
 const Stack = createStackNavigator();
 
 export default function AppNavigator() {
@@ -53,6 +54,7 @@ export default function AppNavigator() {
      <Stack.Screen name="SkillVerificationScreen" component={SkillVerificationScreen} />
       <Stack.Screen name="HomeContentScreen" component={HomeContentScreen} />
       <Stack.Screen name="SessionCreationScreen" component={SessionCreationScreen} />
+      <Stack.Screen name="ProfileViewScreen1" component={ProfileViewScreen1} />
     </Stack.Navigator>
   );
 }

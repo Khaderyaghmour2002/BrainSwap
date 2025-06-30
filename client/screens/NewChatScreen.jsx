@@ -17,7 +17,6 @@ import {
   Bubble,
   Send,
   InputToolbar,
-  Message,
 } from 'react-native-gifted-chat';
 import {
   getDownloadURL,
@@ -34,13 +33,11 @@ import {
 
 import { FirebaseAuth, FirestoreDB } from '../../server/firebaseConfig';
 import { colors } from '../assets/constants';
-import moment from 'moment';
 
 const NewChatScreen = ({ route, navigation }) => {
   const { user } = route.params;
   const currentUser = FirebaseAuth.currentUser;
   const chatId = [currentUser.uid, user.id].sort().join('_');
-const shownDates = new Set();
 
   const [messages, setMessages] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -220,7 +217,9 @@ const shownDates = new Set();
     <Ionicons name="arrow-back" size={24} color="#fff" />
   </TouchableOpacity>
 
+<TouchableOpacity onPress={() => navigation.navigate('ProfileViewScreen1', { userId: user.id })}>
   <Image source={{ uri: user.photoUrl }} style={styles.headerAvatar} />
+</TouchableOpacity>
 
   <Text style={styles.headerTitle} numberOfLines={1}>
     {user.firstName}
@@ -263,117 +262,86 @@ const shownDates = new Set();
         </View>
       )}
 
-    <GiftedChat
-  messages={messages}
-  onSend={(msgs) => onSend(msgs)}
-  user={{
-    _id: currentUser.uid,
-    name: currentUser.displayName || 'User',
-    avatar: currentUser.photoURL,
-  }}
-  renderMessage={(props) => {
-    const { currentMessage } = props;
-
-    const msgDate = moment(currentMessage.createdAt);
-    const today = moment();
-    const yesterday = moment().subtract(1, 'days');
-
-    let label;
-    if (msgDate.isSame(today, 'day')) {
-      label = 'Today';
-    } else if (msgDate.isSame(yesterday, 'day')) {
-      label = 'Yesterday';
-    } else if (today.diff(msgDate, 'days') <= 6) {
-      label = msgDate.format('dddd');
-    } else {
-      label = msgDate.format('DD/MM/YYYY');
-    }
-
-    const key = msgDate.format('YYYY-MM-DD');
-    const showLabel = !shownDates.has(key);
-    if (showLabel) shownDates.add(key);
-
-    return (
-      <View>
-        {showLabel && (
-          <View style={{ alignItems: 'center', marginVertical: 10 }}>
-            <Text style={{ fontWeight: '600', color: '#555' }}>{label}</Text>
+      <GiftedChat
+        messages={messages}
+        onSend={(msgs) => onSend(msgs)}
+        user={{
+          _id: currentUser.uid,
+          name: currentUser.displayName || 'User',
+          avatar: currentUser.photoURL,
+        }}
+        renderBubble={(props) => (
+          <Bubble
+            {...props}
+            wrapperStyle={{
+              right: { backgroundColor: colors.primary },
+              left: { backgroundColor: '#e5e5ea' },
+            }}
+          />
+        )}
+        renderInputToolbar={(props) => (
+          <InputToolbar {...props} containerStyle={styles.inputToolbar} />
+        )}
+        renderSend={(props) => (
+          <Send {...props}>
+            <View style={styles.sendButton}>
+              <Ionicons name="send" size={20} color="#fff" />
+            </View>
+          </Send>
+        )}
+        renderActions={() => (
+          <View style={styles.actionsContainer}>
+            <TouchableOpacity onPress={() => alert('Emoji picker not implemented')} style={styles.actionIcon}>
+              <Ionicons name="happy-outline" size={24} color={colors.teal} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={pickImage} style={styles.actionIcon}>
+              <Ionicons name="attach-outline" size={24} color={colors.teal} />
+            </TouchableOpacity>
           </View>
         )}
-        <Message {...props} />
+renderCustomView={({ currentMessage }) => {
+  if (currentMessage.pendingConfirmation && currentMessage.user._id !== currentUser.uid) {
+    return (
+      <View style={{ alignItems: 'center', marginTop: 4 }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => handleSessionResponse(currentMessage.sessionId, true)}
+            style={{ backgroundColor: 'green', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>Confirm</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => handleSessionResponse(currentMessage.sessionId, false)}
+            style={{ backgroundColor: 'red', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
-  }}
-  renderBubble={(props) => (
-    <Bubble
-      {...props}
-      wrapperStyle={{
-        right: { backgroundColor: colors.primary },
-        left: { backgroundColor: '#e5e5ea' },
-      }}
-    />
-  )}
-  renderInputToolbar={(props) => (
-    <InputToolbar {...props} containerStyle={styles.inputToolbar} />
-  )}
-  renderSend={(props) => (
-    <Send {...props}>
-      <View style={styles.sendButton}>
-        <Ionicons name="send" size={20} color="#fff" />
+  }
+
+  if (currentMessage.confirmationResult) {
+    return (
+      <View style={{ alignItems: 'center', marginTop: 4 }}>
+        <Text
+          style={{
+            color: currentMessage.confirmationResult.includes('Confirmed') ? 'green' : 'red',
+            fontWeight: '600'
+          }}
+        >
+          {currentMessage.confirmationResult}
+        </Text>
       </View>
-    </Send>
-  )}
-  renderActions={() => (
-    <View style={styles.actionsContainer}>
-      <TouchableOpacity onPress={() => alert('Emoji picker not implemented')} style={styles.actionIcon}>
-        <Ionicons name="happy-outline" size={24} color={colors.teal} />
-      </TouchableOpacity>
-      <TouchableOpacity onPress={pickImage} style={styles.actionIcon}>
-        <Ionicons name="attach-outline" size={24} color={colors.teal} />
-      </TouchableOpacity>
-    </View>
-  )}
-  renderCustomView={({ currentMessage }) => {
-    if (currentMessage.pendingConfirmation && currentMessage.user._id !== currentUser.uid) {
-      return (
-        <View style={{ alignItems: 'center', marginTop: 4 }}>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity
-              onPress={() => handleSessionResponse(currentMessage.sessionId, true)}
-              style={{ backgroundColor: 'green', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
-            >
-              <Text style={{ color: '#fff', fontWeight: '600' }}>Confirm</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleSessionResponse(currentMessage.sessionId, false)}
-              style={{ backgroundColor: 'red', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
-            >
-              <Text style={{ color: '#fff', fontWeight: '600' }}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      );
-    }
+    );
+  }
 
-    if (currentMessage.confirmationResult) {
-      return (
-        <View style={{ alignItems: 'center', marginTop: 4 }}>
-          <Text
-            style={{
-              color: currentMessage.confirmationResult.includes('Confirmed') ? 'green' : 'red',
-              fontWeight: '600',
-            }}
-          >
-            {currentMessage.confirmationResult}
-          </Text>
-        </View>
-      );
-    }
+  return null;
+}}
 
-    return null;
-  }}
-/>
 
+
+      />
     </View>
   );
 };
