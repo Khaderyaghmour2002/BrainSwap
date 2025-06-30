@@ -292,6 +292,108 @@ postHeaderRow: {
 deleteIcon: {
   padding: 4,
 },
+reviewCard: {
+  backgroundColor: "#fff",
+  borderRadius: 10,
+  padding: 12,
+  marginVertical: 6,
+  elevation: 2,
+},
+
+reviewHeader: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginBottom: 6,
+},
+
+reviewerPhoto: {
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+  marginRight: 10,
+  backgroundColor: "#ddd",
+},
+
+reviewAuthor: {
+  fontWeight: "600",
+  fontSize: 14,
+  color: "#333",
+},
+
+reviewText: {
+  fontSize: 14,
+  color: "#555",
+  marginLeft: 2,
+},
+bioModalOverlay: {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.4)",
+  justifyContent: "flex-start",
+  alignItems: "center",
+  paddingTop: 60,
+  zIndex: 1000,
+},
+
+bioModal: {
+  width: "90%",
+  backgroundColor: "#fff",
+  borderRadius: 10,
+  padding: 20,
+  elevation: 5,
+},
+
+bioModalTitle: {
+  fontSize: 18,
+  fontWeight: "bold",
+  marginBottom: 10,
+  textAlign: "center",
+},
+
+bioInput: {
+  height: 100,
+  borderWidth: 1,
+  borderColor: "#ccc",
+  borderRadius: 8,
+  padding: 10,
+  textAlignVertical: "top",
+  marginBottom: 15,
+},
+
+bioModalButtons: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+},
+
+cancelButton: {
+  padding: 10,
+  backgroundColor: "#ccc",
+  borderRadius: 6,
+  flex: 1,
+  marginRight: 10,
+},
+
+saveButton: {
+  padding: 10,
+  backgroundColor: "#6a11cb",
+  borderRadius: 6,
+  flex: 1,
+},
+
+cancelButtonText: {
+  color: "#333",
+  textAlign: "center",
+  fontWeight: "500",
+},
+
+saveButtonText: {
+  color: "#fff",
+  textAlign: "center",
+  fontWeight: "500",
+},
 
 
 });

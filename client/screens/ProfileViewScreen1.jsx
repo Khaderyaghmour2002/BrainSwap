@@ -20,16 +20,19 @@ import {
   addDoc,
   serverTimestamp,
   getDocs,
+  query,
+  orderBy,
 } from "firebase/firestore";
 import { FirestoreDB, FirebaseAuth } from "../../server/firebaseConfig";
 
-export default function ProfileViewScreen({ route }) {
+export default function ProfileViewScreen({ route, navigation }) {
   const { userId } = route.params;
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedScore, setSelectedScore] = useState(null);
   const [reviewText, setReviewText] = useState("");
   const [alreadyReviewed, setAlreadyReviewed] = useState(false);
+  const [reviews, setReviews] = useState([]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -41,12 +44,24 @@ export default function ProfileViewScreen({ route }) {
         }
 
         const reviewerId = FirebaseAuth.currentUser?.uid;
-        if (!reviewerId) return;
-
         const reviewsRef = collection(FirestoreDB, "users", userId, "reviews");
-        const reviewsSnap = await getDocs(reviewsRef);
+        const reviewsQuery = query(reviewsRef, orderBy("timestamp", "desc"));
+        const reviewsSnap = await getDocs(reviewsQuery);
 
-        const already = reviewsSnap.docs.some(doc => doc.data().reviewerId === reviewerId);
+        const reviewList = await Promise.all(
+          reviewsSnap.docs.map(async (docSnap) => {
+            const data = docSnap.data();
+            const reviewerDoc = await getDoc(doc(FirestoreDB, "users", data.reviewerId));
+            return {
+              ...data,
+              reviewerName: reviewerDoc?.data()?.firstName || "Anonymous",
+              reviewerPhoto: reviewerDoc?.data()?.photoUrl || null,
+            };
+          })
+        );
+
+        setReviews(reviewList);
+        const already = reviewList.some(r => r.reviewerId === reviewerId);
         setAlreadyReviewed(already);
       } catch (error) {
         Alert.alert("Error", "Failed to load user data or check reviews.");
@@ -81,6 +96,10 @@ export default function ProfileViewScreen({ route }) {
       keyboardVerticalOffset={100}
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <TouchableOpacity style={styles.backIcon} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={26} color="#6a11cb" />
+        </TouchableOpacity>
+
         <View style={styles.profileCard}>
           <Image
             source={{ uri: user.photoUrl || "https://via.placeholder.com/150" }}
@@ -188,6 +207,24 @@ export default function ProfileViewScreen({ route }) {
             )}
           </View>
         )}
+
+        {reviews.length > 0 && (
+          <View style={styles.reviewSection}>
+            <Text style={styles.sectionTitle}>Reviews</Text>
+            {reviews.map((review, index) => (
+              <View key={index} style={styles.reviewItem}>
+                <Image
+                  source={{ uri: review.reviewerPhoto || "https://via.placeholder.com/100" }}
+                  style={styles.reviewerImage}
+                />
+                <View style={styles.reviewTextContainer}>
+                  <Text style={{ fontWeight: "bold" }}>{review.reviewerName}</Text>
+                  <Text style={{ color: "#555" }}>{review.text}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -207,13 +244,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#f0f2f5",
   },
+  backIcon: {
+    alignSelf: "flex-start",
+    marginTop: 20,
+  },
   loaderContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
   profileCard: {
-    marginTop: 30,
+    marginTop: 10,
     alignItems: "center",
     marginBottom: 30,
     backgroundColor: "#fff",
@@ -290,6 +331,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 20,
     elevation: 2,
+  },
+  reviewItem: {
+    flexDirection: "row",
+    marginBottom: 12,
+    alignItems: "flex-start",
+  },
+  reviewerImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  reviewTextContainer: {
+    flex: 1,
   },
   reviewInput: {
     borderWidth: 1,

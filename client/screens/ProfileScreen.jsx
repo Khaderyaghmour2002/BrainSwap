@@ -7,11 +7,23 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+    TextInput,
+
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
-import { doc, getDoc, updateDoc,collection, query, where, getDocs, orderBy, deleteDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  deleteDoc,
+} from "firebase/firestore";
 import * as ImagePicker from "expo-image-picker";
 import { useNavigation } from "@react-navigation/native";
 import styles from "../StyleSheets/ProfileScreenStyle";
@@ -21,8 +33,9 @@ export default function ProfileScreen() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-const [userPosts, setUserPosts] = useState([]);
-const currentUser = FirebaseAuth.currentUser;
+  const [userPosts, setUserPosts] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const currentUser = FirebaseAuth.currentUser;
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -47,44 +60,64 @@ const currentUser = FirebaseAuth.currentUser;
     };
     fetchUserData();
   }, []);
-useEffect(() => {
-  const fetchUserPosts = async () => {
-    if (!currentUser) return;
+const [isBioModalVisible, setIsBioModalVisible] = useState(false);
+const [editedBio, setEditedBio] = useState(user?.bio || "");
+  useEffect(() => {
+    const fetchUserPosts = async () => {
+      if (!currentUser) return;
 
-    try {
-      const postsRef = collection(FirestoreDB, "posts");
-      const q = query(
-        postsRef,
-        where("userId", "==", currentUser.uid),
-        orderBy("createdAt", "desc")
-      );
-      const querySnapshot = await getDocs(q);
+      try {
+        const postsRef = collection(FirestoreDB, "posts");
+        const q = query(
+          postsRef,
+          where("userId", "==", currentUser.uid),
+          orderBy("createdAt", "desc")
+        );
+        const querySnapshot = await getDocs(q);
 
-      const posts = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+        const posts = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
 
-      setUserPosts(posts);
-    } catch (error) {
-      console.error("Error fetching user posts:", error);
-    }
-  };
+        setUserPosts(posts);
+      } catch (error) {
+        console.error("Error fetching user posts:", error);
+      }
+    };
 
-  fetchUserPosts();
-}, []);
+const fetchReviews = async () => {
+  try {
+    const reviewsRef = collection(FirestoreDB, "users", currentUser.uid, "reviews");
+    const snapshot = await getDocs(reviewsRef);
+    const data = await Promise.all(
+      snapshot.docs.map(async (reviewDoc) => {
+        const review = reviewDoc.data();
+        const reviewerSnap = await getDoc(doc(FirestoreDB, "users", review.reviewerId));
+        return {
+          ...review,
+          reviewerName: reviewerSnap.data()?.firstName || "Anonymous",
+          reviewerPhoto: reviewerSnap.data()?.photoUrl || null,
+        };
+      })
+    );
+    setReviews(data);
+  } catch (error) {
+    console.error("Error fetching reviews:", error);
+  }
+};
+
+
+    fetchUserPosts();
+    fetchReviews();
+  }, []);
 
   const choosePhotoOption = () => {
-    Alert.alert(
-      "Upload Photo",
-      "Choose an option",
-      [
-        { text: "Take Photo", onPress: takePhotoWithCamera },
-        { text: "Choose from Gallery", onPress: pickImageFromLibrary },
-        { text: "Cancel", style: "cancel" },
-      ],
-      { cancelable: true }
-    );
+    Alert.alert("Upload Photo", "Choose an option", [
+      { text: "Take Photo", onPress: takePhotoWithCamera },
+      { text: "Choose from Gallery", onPress: pickImageFromLibrary },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const pickImageFromLibrary = async () => {
@@ -147,230 +180,274 @@ useEffect(() => {
         {
           text: "Verify Now",
           onPress: () => {
-            console.log(`Navigating to SkillVerificationScreen for skill: ${skill.name}`);
             navigation.navigate("SkillVerificationScreen", { skill: skill.name });
           },
         },
       ]
     );
   };
-const confirmDeletePost = (postId) => {
-  Alert.alert(
-    "Delete Post",
-    "Are you sure you want to delete this post?",
-    [
+
+  const confirmDeletePost = (postId) => {
+    Alert.alert("Delete Post", "Are you sure you want to delete this post?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
         style: "destructive",
         onPress: () => handleDeletePost(postId),
       },
-    ]
-  );
-};
+    ]);
+  };
 
-const handleDeletePost = async (postId) => {
-  try {
-    await deleteDoc(doc(FirestoreDB, "posts", postId));
-    setUserPosts(prev => prev.filter(post => post.id !== postId));
-    Alert.alert("Deleted", "Your post has been deleted.");
-  } catch (error) {
-    console.error("Error deleting post:", error);
-    Alert.alert("Error", "Failed to delete the post.");
-  }
-};
+  const handleDeletePost = async (postId) => {
+    try {
+      await deleteDoc(doc(FirestoreDB, "posts", postId));
+      setUserPosts((prev) => prev.filter((post) => post.id !== postId));
+      Alert.alert("Deleted", "Your post has been deleted.");
+    } catch (error) {
+      console.error("Error deleting post:", error);
+      Alert.alert("Error", "Failed to delete the post.");
+    }
+  };
 
-  if (loading) {
+    if (loading) {
+      return (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color="#6a11cb" />
+        </View>
+      );
+    }
+
+    if (!user) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorMessage}>Failed to load user data.</Text>
+        </View>
+      );
+    }
+
     return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color="#6a11cb" />
-      </View>
-    );
-  }
+      <View style={{ flex: 1, backgroundColor: "#f5f7fa" }}>
+        <LinearGradient colors={["#6a11cb", "#2575fc"]} style={styles.headerCurvedBackground}>
+        
+        </LinearGradient>
 
-  if (!user) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorMessage}>Failed to load user data.</Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={{ flex: 1, backgroundColor: "#f5f7fa" }}>
-      <LinearGradient colors={["#6a11cb", "#2575fc"]} style={styles.headerCurvedBackground}>
+        <ScrollView contentContainerStyle={styles.profileContainer}>
+  {isBioModalVisible && (
+  <View style={styles.bioModalOverlay}>
+    <View style={styles.bioModal}>
+      <Text style={styles.bioModalTitle}>Edit Bio</Text>
+      <TextInput
+        value={editedBio}
+        onChangeText={setEditedBio}
+        multiline
+        placeholder="Enter your bio..."
+        style={styles.bioInput}
+      />
+      <View style={styles.bioModalButtons}>
         <TouchableOpacity
-          style={styles.settingsIcon}
-          onPress={() => navigation.navigate("Settings")}
+          style={styles.cancelButton}
+          onPress={() => setIsBioModalVisible(false)}
         >
-          <Ionicons name="settings-outline" size={24} color="#fff" />
+          <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
-      </LinearGradient>
-
-      <ScrollView contentContainerStyle={styles.profileContainer}>
-        <View style={styles.profileAvatarContainer}>
-          <View style={styles.avatarBackground}>
-            {selectedImage || user.photoUrl ? (
-              <Image source={{ uri: selectedImage || user.photoUrl }} style={styles.profileAvatarImage} />
-            ) : (
-              <Ionicons name="person-circle-outline" size={100} color="#fff" style={styles.profileAvatarIcon} />
-            )}
-          </View>
-          <TouchableOpacity style={styles.editPhotoButton} onPress={choosePhotoOption}>
-            <Ionicons name="camera-outline" size={22} color="#6a11cb" />
-          </TouchableOpacity>
-          <Text style={styles.profileName}>{user.firstName || "Unknown User"}</Text>
-
-          <View style={styles.bioContainer}>
-            <Text style={styles.profileBio}>{user.bio || "No bio available."}</Text>
-            <TouchableOpacity style={styles.editIcon} onPress={() => navigation.navigate("EditBio", { bio: user.bio })}>
-              <Ionicons name="pencil-outline" size={20} color="#6a11cb" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.profileStatsCard}>
-          <View style={styles.profileStatsRow}>
-            <View style={styles.profileStatItem}>
-              <Ionicons name="ribbon-outline" size={22} color="#4caf50" />
-              <Text style={styles.profileStatValue}>{user.skillPoints || 0}</Text>
-              <Text style={styles.profileStatLabel}>Skill Points</Text>
-            </View>
-            <View style={styles.profileStatItem}>
-              <Ionicons name="location-outline" size={22} color="#4caf50" />
-              <Text style={styles.profileStatValue}>
-                {user.city && user.country ? `${user.city}, ${user.country}` : "Unknown Location"}
-              </Text>
-              <Text style={styles.profileStatLabel}>Location</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.skillsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Skills to Teach</Text>
-            <TouchableOpacity   onPress={() =>
-    navigation.navigate("EditSkillsScreen", {
-      skills: user.skillsToTeach,
-      type: "teach",
-      skillsToTeach: user.skillsToTeach,
-      skillsToLearn: user.skillsToLearn,
-    })
-  }>
-              <Ionicons name="pencil-outline" size={20} color="#6a11cb" />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.skillsPillContainer}>
-            {user.skillsToTeach?.length > 0 ? (
-              user.skillsToTeach.map((skill, index) => (
-                <View
-                  key={skill.name + index}
-                  style={[styles.skillPill, { flexDirection: "row", alignItems: "center" }]}
-                >
-                  <Text style={styles.skillPillText}>{skill.name}</Text>
-                  <TouchableOpacity onPress={() => !skill.verified && handleVerifyPrompt(skill)}>
-                    <Ionicons
-                      name={skill.verified ? "checkmark-circle" : "help-circle"}
-                      size={18}
-                      color={skill.verified ? "#4caf50" : "#fbc02d"}
-                      style={{ marginLeft: 6 }}
-                    />
-                  </TouchableOpacity>
-                </View>
-              ))
-            ) : (
-              <Text>No skills added yet.</Text>
-            )}
-          </View>
-        </View>
-
-        <View style={styles.skillsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Skills to Learn</Text>
-            <TouchableOpacity  onPress={() =>
-    navigation.navigate("EditSkillsScreen", {
-      skills: user.skillsToLearn,
-      type: "learn",
-      skillsToTeach: user.skillsToTeach,
-      skillsToLearn: user.skillsToLearn,
-    })
-  }
->
-              <Ionicons name="pencil-outline" size={20} color="#6a11cb" />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.skillsPillContainer}>
-            {user.skillsToLearn?.length > 0 ? (
-              user.skillsToLearn.map((skill, index) => (
-                <View key={index} style={styles.skillPill}>
-                  <Text style={styles.skillPillText}>{skill}</Text>
-                </View>
-              ))
-            ) : (
-              <Text>No skills added yet.</Text>
-            )}
-          </View>
-        </View>
-<View style={styles.reviewsSection}>
-  <Text style={styles.sectionTitle}>Reviews</Text>
-  {user.reviews && user.reviews.length > 0 ? (
-    user.reviews.map((review, idx) => (
-      <View key={idx} style={styles.reviewCard}>
-        <View style={styles.reviewHeader}>
-          <Ionicons name="person-circle-outline" size={22} color="#6a11cb" />
-          <Text style={styles.reviewAuthor}>{review.reviewerName}</Text>
-        </View>
-        <Text style={styles.reviewText}>{review.comment}</Text>
+        <TouchableOpacity
+          style={styles.saveButton}
+          onPress={async () => {
+            try {
+              const userRef = doc(FirestoreDB, "users", currentUser.uid);
+              await updateDoc(userRef, { bio: editedBio });
+              setUser(prev => ({ ...prev, bio: editedBio }));
+              setIsBioModalVisible(false);
+              Alert.alert("Success", "Bio updated.");
+            } catch (err) {
+              Alert.alert("Error", "Failed to update bio.");
+              console.error(err);
+            }
+          }}
+        >
+          <Text style={styles.saveButtonText}>Save</Text>
+        </TouchableOpacity>
       </View>
-    ))
-  ) : (
-    <Text style={styles.sectionText}>No reviews yet.</Text>
-  )}
+    </View>
+  </View>
+)}
+
+
+          <View style={styles.profileAvatarContainer}>
+            <View style={styles.avatarBackground}>
+              {selectedImage || user.photoUrl ? (
+                <Image source={{ uri: selectedImage || user.photoUrl }} style={styles.profileAvatarImage} />
+              ) : (
+                <Ionicons name="person-circle-outline" size={100} color="#fff" style={styles.profileAvatarIcon} />
+              )}
+            </View>
+            <TouchableOpacity style={styles.editPhotoButton} onPress={choosePhotoOption}>
+              <Ionicons name="camera-outline" size={22} color="#6a11cb" />
+            </TouchableOpacity>
+            <Text style={styles.profileName}>{user.firstName || "Unknown User"}</Text>
+
+            <View style={styles.bioContainer}>
+              <Text style={styles.profileBio}>{user.bio || "No bio available."}</Text>
+               <TouchableOpacity
+  style={styles.editIcon}
+  onPress={() => {
+    setEditedBio(user.bio || "");
+    setIsBioModalVisible(true);
+  }}
+>
+  <Ionicons name="pencil-outline" size={20} color="#6a11cb" />
+</TouchableOpacity>
+
+            </View>
+          </View>
+
+          <View style={styles.profileStatsCard}>
+            <View style={styles.profileStatsRow}>
+              <View style={styles.profileStatItem}>
+                <Ionicons name="ribbon-outline" size={22} color="#4caf50" />
+                <Text style={styles.profileStatValue}>{user.skillPoints || 0}</Text>
+                <Text style={styles.profileStatLabel}>Skill Points</Text>
+              </View>
+              <View style={styles.profileStatItem}>
+                <Ionicons name="location-outline" size={22} color="#4caf50" />
+                <Text style={styles.profileStatValue}>
+                  {user.city && user.country ? `${user.city}, ${user.country}` : "Unknown Location"}
+                </Text>
+                <Text style={styles.profileStatLabel}>Location</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.skillsSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Skills to Teach</Text>
+              <TouchableOpacity   onPress={() =>
+      navigation.navigate("EditSkillsScreen", {
+        skills: user.skillsToTeach,
+        type: "teach",
+        skillsToTeach: user.skillsToTeach,
+        skillsToLearn: user.skillsToLearn,
+      })
+    }>
+                <Ionicons name="pencil-outline" size={20} color="#6a11cb" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.skillsPillContainer}>
+              {user.skillsToTeach?.length > 0 ? (
+                user.skillsToTeach.map((skill, index) => (
+                  <View
+                    key={skill.name + index}
+                    style={[styles.skillPill, { flexDirection: "row", alignItems: "center" }]}
+                  >
+                    <Text style={styles.skillPillText}>{skill.name}</Text>
+                    <TouchableOpacity onPress={() => !skill.verified && handleVerifyPrompt(skill)}>
+                      <Ionicons
+                        name={skill.verified ? "checkmark-circle" : "help-circle"}
+                        size={18}
+                        color={skill.verified ? "#4caf50" : "#fbc02d"}
+                        style={{ marginLeft: 6 }}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              ) : (
+                <Text>No skills added yet.</Text>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.skillsSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Skills to Learn</Text>
+              <TouchableOpacity  onPress={() =>
+      navigation.navigate("EditSkillsScreen", {
+        skills: user.skillsToLearn,
+        type: "learn",
+        skillsToTeach: user.skillsToTeach,
+        skillsToLearn: user.skillsToLearn,
+      })
+    }
+  >
+                <Ionicons name="pencil-outline" size={20} color="#6a11cb" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.skillsPillContainer}>
+              {user.skillsToLearn?.length > 0 ? (
+                user.skillsToLearn.map((skill, index) => (
+                  <View key={index} style={styles.skillPill}>
+                    <Text style={styles.skillPillText}>{skill}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text>No skills added yet.</Text>
+              )}
+            </View>
+          </View>
+   <View style={styles.reviewsSection}>
+        <Text style={styles.sectionTitle}>Reviews</Text>
+        {reviews.length > 0 ? (
+          reviews.map((review, idx) => (
+            <View key={idx} style={styles.reviewCard}>
+  <View style={styles.reviewHeader}>
+    {review.reviewerPhoto ? (
+      <Image source={{ uri: review.reviewerPhoto }} style={styles.reviewerPhoto} />
+    ) : (
+      <Ionicons name="person-circle-outline" size={36} color="#6a11cb" />
+    )}
+    <Text style={styles.reviewAuthor}>{review.reviewerName}</Text>
+  </View>
+  <Text style={styles.reviewText}>{review.text}</Text>
 </View>
 
-<View style={styles.postsSection}>
-  <View style={styles.sectionHeader}>
-    <Text style={styles.sectionTitle}>My Posts</Text>
-  </View>
-
-  {userPosts.length === 0 ? (
-    <Text style={{ color: '#777', marginTop: 10, textAlign: 'center' }}>
-      You haven’t posted anything yet.
-    </Text>
-  ) : (
-    userPosts.map((post, index) => (
-      <View key={index} style={styles.postCard}>
-        <View style={styles.postHeaderRow}>
-          {post.caption && <Text style={styles.postCaption}>{post.caption}</Text>}
-          <TouchableOpacity
-            onPress={() => confirmDeletePost(post.id)}
-            style={styles.deleteIcon}
-          >
-            <Ionicons name="trash-outline" size={20} color="#d32f2f" />
-          </TouchableOpacity>
-        </View>
-        {post.imageUrl && (
-          <Image source={{ uri: post.imageUrl }} style={styles.postImage} />
+          ))
+        ) : (
+          <Text style={styles.sectionText}>No reviews yet.</Text>
         )}
       </View>
-    ))
-  )}
-</View>
 
-
-
-        <TouchableOpacity style={styles.logoutButton} onPress={async () => {
-          try {
-            await FirebaseAuth.signOut();
-            navigation.replace("StartScreen");
-          } catch (error) {
-            console.error("Error logging out:", error);
-            Alert.alert("Error", "Failed to log out. Please try again.");
-          }
-        }}>
-          <Text style={styles.logoutText}>Log Out</Text>
-        </TouchableOpacity>
-      </ScrollView>
+  <View style={styles.postsSection}>
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle}>My Posts</Text>
     </View>
-  );
-}
+
+    {userPosts.length === 0 ? (
+      <Text style={{ color: '#777', marginTop: 10, textAlign: 'center' }}>
+        You haven’t posted anything yet.
+      </Text>
+    ) : (
+      userPosts.map((post, index) => (
+        <View key={index} style={styles.postCard}>
+          <View style={styles.postHeaderRow}>
+            {post.caption && <Text style={styles.postCaption}>{post.caption}</Text>}
+            <TouchableOpacity
+              onPress={() => confirmDeletePost(post.id)}
+              style={styles.deleteIcon}
+            >
+              <Ionicons name="trash-outline" size={20} color="#d32f2f" />
+            </TouchableOpacity>
+          </View>
+          {post.imageUrl && (
+            <Image source={{ uri: post.imageUrl }} style={styles.postImage} />
+          )}
+        </View>
+      ))
+    )}
+  </View>
+
+
+
+          <TouchableOpacity style={styles.logoutButton} onPress={async () => {
+            try {
+              await FirebaseAuth.signOut();
+              navigation.replace("StartScreen");
+            } catch (error) {
+              console.error("Error logging out:", error);
+              Alert.alert("Error", "Failed to log out. Please try again.");
+            }
+          }}>
+            <Text style={styles.logoutText}>Log Out</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    );
+  }
