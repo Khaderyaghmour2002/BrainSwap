@@ -28,7 +28,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useNavigation } from "@react-navigation/native";
 import styles from "../StyleSheets/ProfileScreenStyle";
 
-export default function ProfileScreen() {
+export default  function ProfileScreen() {
   const navigation = useNavigation();
   const [selectedImage, setSelectedImage] = useState(null);
   const [user, setUser] = useState(null);
@@ -144,12 +144,67 @@ const fetchConnections = async () => {
     console.error("Error fetching connections:", error);
   }
 };
+const fetchUserData = async () => {
+    try {
+      const currentUser = FirebaseAuth.currentUser;
+      if (currentUser) {
+        const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data();
+          setUser(userData);
+
+          // ✅ Update skill points AFTER setting user
+          await calculateSkillPoints(currentUser.uid);
+        } else {
+          console.error("No such user data found in Firestore!");
+        }
+      } else {
+        console.error("No user is currently logged in.");
+      }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+    fetchUserData();
+
     fetchUserPosts();
     fetchReviews();
     fetchConnections();
 
   }, []);
 
+
+const calculateSkillPoints = async (userId) => {
+  try {
+    const reviewsRef = collection(FirestoreDB, "users", userId, "reviews");
+    const snapshot = await getDocs(reviewsRef);
+
+    let total = 0;
+    let count = 0;
+
+    snapshot.forEach((doc) => {
+      const review = doc.data();
+      if (typeof review.score === "number") {
+        total += review.score;
+        count += 1;
+      }
+    });
+
+    const averageRating = count > 0 ? total / count : 0;
+
+    const userRef = doc(FirestoreDB, "users", userId);
+    await updateDoc(userRef, {
+      skillPoints: Math.round(averageRating * 10) / 10,
+    });
+
+    console.log(`Updated skillPoints for ${userId}: ${averageRating}`);
+  } catch (error) {
+    console.error("Error calculating skill points:", error);
+  }
+};
 
 
   const choosePhotoOption = () => {
@@ -435,7 +490,7 @@ const fetchConnections = async () => {
         <TouchableOpacity
           key={user.id || idx}
           style={styles.connectionItem}
-          onPress={() => navigation.navigate("ProfileViewScreen", { userId: user.id })}
+          onPress={() => navigation.navigate("ProfileViewScreen1", { userId: user.id })}
         >
           {user.photoUrl ? (
             <Image source={{ uri: user.photoUrl }} style={styles.connectionPhoto} />
