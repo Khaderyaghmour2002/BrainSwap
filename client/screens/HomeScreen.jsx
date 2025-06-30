@@ -160,7 +160,7 @@ export default function HomeScreenWithCustomNav() {
               activeTab === "requests" && styles.moreBoldText,
             ]}
           >
-            Requests
+            Updates
           </Text>
         </TouchableOpacity>
       </View>

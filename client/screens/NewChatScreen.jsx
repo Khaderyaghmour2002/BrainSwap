@@ -17,6 +17,7 @@ import {
   Bubble,
   Send,
   InputToolbar,
+  Message,
 } from 'react-native-gifted-chat';
 import {
   getDownloadURL,
@@ -33,11 +34,13 @@ import {
 
 import { FirebaseAuth, FirestoreDB } from '../../server/firebaseConfig';
 import { colors } from '../assets/constants';
+import moment from 'moment';
 
 const NewChatScreen = ({ route, navigation }) => {
   const { user } = route.params;
   const currentUser = FirebaseAuth.currentUser;
   const chatId = [currentUser.uid, user.id].sort().join('_');
+const shownDates = new Set();
 
   const [messages, setMessages] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -74,7 +77,7 @@ const NewChatScreen = ({ route, navigation }) => {
               avatar: msg.user._id === currentUser.uid ? currentUser.photoURL : user.photoUrl,
             },
           }))
-          .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // ✅ Newest first
         setMessages(msgs);
       }
     });
@@ -212,39 +215,47 @@ const NewChatScreen = ({ route, navigation }) => {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIcon}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Image source={{ uri: user.photoUrl }} style={styles.headerAvatar} />
-        <Text style={styles.headerTitle}>{user.firstName}</Text>
-        <TouchableOpacity
-          style={styles.headerIcon}
-          onPress={() => {
-            if (fullCurrentUserData && fullOtherUserData) {
-              navigation.navigate('SessionCreationScreen', {
-                user,
-                myTeachSkills: (fullCurrentUserData.skillsToTeach || []).map(s => s.name).filter(skill =>
-                  (fullOtherUserData.skillsToLearn || []).includes(skill)
-                ),
-                myLearnSkills: (fullCurrentUserData.skillsToLearn || []).filter(skill =>
-                  (fullOtherUserData.skillsToTeach || []).some(s => s.name === skill)
-                ),
-              });
-            } else {
-              alert('User data not loaded yet');
-            }
-          }}
-        >
-          <Ionicons name="calendar-outline" size={24} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.headerIcon} onPress={() => navigation.navigate('VoiceCallScreen', { user })}>
-          <Ionicons name="call-outline" size={24} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.headerIcon} onPress={() => navigation.navigate('VideoCallScreen', { user })}>
-          <Ionicons name="videocam-outline" size={24} color="#fff" />
-        </TouchableOpacity>
-      </View>
+  <View style={styles.header}>
+  <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIcon}>
+    <Ionicons name="arrow-back" size={24} color="#fff" />
+  </TouchableOpacity>
+
+  <Image source={{ uri: user.photoUrl }} style={styles.headerAvatar} />
+
+  <Text style={styles.headerTitle} numberOfLines={1}>
+    {user.firstName}
+  </Text>
+
+  <TouchableOpacity
+    style={styles.headerIcon}
+    onPress={() => {
+      if (fullCurrentUserData && fullOtherUserData) {
+        navigation.navigate('SessionCreationScreen', {
+          user,
+          myTeachSkills: (fullCurrentUserData.skillsToTeach || []).map(s => s.name).filter(skill =>
+            (fullOtherUserData.skillsToLearn || []).includes(skill)
+          ),
+          myLearnSkills: (fullCurrentUserData.skillsToLearn || []).filter(skill =>
+            (fullOtherUserData.skillsToTeach || []).some(s => s.name === skill)
+          ),
+        });
+      } else {
+        alert('User data not loaded yet');
+      }
+    }}
+  >
+    <Ionicons name="calendar-outline" size={24} color="#fff" />
+  </TouchableOpacity>
+
+  <TouchableOpacity style={styles.headerIcon} onPress={() => navigation.navigate('VoiceCallScreen', { user })}>
+    <Ionicons name="call-outline" size={24} color="#fff" />
+  </TouchableOpacity>
+
+  <TouchableOpacity style={styles.headerIcon} onPress={() => navigation.navigate('VideoCallScreen', { user })}>
+    <Ionicons name="videocam-outline" size={24} color="#fff" />
+  </TouchableOpacity>
+</View>
+
 
       {uploading && (
         <View style={styles.uploadingOverlay}>
@@ -252,86 +263,117 @@ const NewChatScreen = ({ route, navigation }) => {
         </View>
       )}
 
-      <GiftedChat
-        messages={messages}
-        onSend={(msgs) => onSend(msgs)}
-        user={{
-          _id: currentUser.uid,
-          name: currentUser.displayName || 'User',
-          avatar: currentUser.photoURL,
-        }}
-        renderBubble={(props) => (
-          <Bubble
-            {...props}
-            wrapperStyle={{
-              right: { backgroundColor: colors.primary },
-              left: { backgroundColor: '#e5e5ea' },
-            }}
-          />
-        )}
-        renderInputToolbar={(props) => (
-          <InputToolbar {...props} containerStyle={styles.inputToolbar} />
-        )}
-        renderSend={(props) => (
-          <Send {...props}>
-            <View style={styles.sendButton}>
-              <Ionicons name="send" size={20} color="#fff" />
-            </View>
-          </Send>
-        )}
-        renderActions={() => (
-          <View style={styles.actionsContainer}>
-            <TouchableOpacity onPress={() => alert('Emoji picker not implemented')} style={styles.actionIcon}>
-              <Ionicons name="happy-outline" size={24} color={colors.teal} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={pickImage} style={styles.actionIcon}>
-              <Ionicons name="attach-outline" size={24} color={colors.teal} />
-            </TouchableOpacity>
+    <GiftedChat
+  messages={messages}
+  onSend={(msgs) => onSend(msgs)}
+  user={{
+    _id: currentUser.uid,
+    name: currentUser.displayName || 'User',
+    avatar: currentUser.photoURL,
+  }}
+  renderMessage={(props) => {
+    const { currentMessage } = props;
+
+    const msgDate = moment(currentMessage.createdAt);
+    const today = moment();
+    const yesterday = moment().subtract(1, 'days');
+
+    let label;
+    if (msgDate.isSame(today, 'day')) {
+      label = 'Today';
+    } else if (msgDate.isSame(yesterday, 'day')) {
+      label = 'Yesterday';
+    } else if (today.diff(msgDate, 'days') <= 6) {
+      label = msgDate.format('dddd');
+    } else {
+      label = msgDate.format('DD/MM/YYYY');
+    }
+
+    const key = msgDate.format('YYYY-MM-DD');
+    const showLabel = !shownDates.has(key);
+    if (showLabel) shownDates.add(key);
+
+    return (
+      <View>
+        {showLabel && (
+          <View style={{ alignItems: 'center', marginVertical: 10 }}>
+            <Text style={{ fontWeight: '600', color: '#555' }}>{label}</Text>
           </View>
         )}
-renderCustomView={({ currentMessage }) => {
-  if (currentMessage.pendingConfirmation && currentMessage.user._id !== currentUser.uid) {
-    return (
-      <View style={{ alignItems: 'center', marginTop: 4 }}>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity
-            onPress={() => handleSessionResponse(currentMessage.sessionId, true)}
-            style={{ backgroundColor: 'green', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
-          >
-            <Text style={{ color: '#fff', fontWeight: '600' }}>Confirm</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleSessionResponse(currentMessage.sessionId, false)}
-            style={{ backgroundColor: 'red', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
-          >
-            <Text style={{ color: '#fff', fontWeight: '600' }}>Cancel</Text>
-          </TouchableOpacity>
+        <Message {...props} />
+      </View>
+    );
+  }}
+  renderBubble={(props) => (
+    <Bubble
+      {...props}
+      wrapperStyle={{
+        right: { backgroundColor: colors.primary },
+        left: { backgroundColor: '#e5e5ea' },
+      }}
+    />
+  )}
+  renderInputToolbar={(props) => (
+    <InputToolbar {...props} containerStyle={styles.inputToolbar} />
+  )}
+  renderSend={(props) => (
+    <Send {...props}>
+      <View style={styles.sendButton}>
+        <Ionicons name="send" size={20} color="#fff" />
+      </View>
+    </Send>
+  )}
+  renderActions={() => (
+    <View style={styles.actionsContainer}>
+      <TouchableOpacity onPress={() => alert('Emoji picker not implemented')} style={styles.actionIcon}>
+        <Ionicons name="happy-outline" size={24} color={colors.teal} />
+      </TouchableOpacity>
+      <TouchableOpacity onPress={pickImage} style={styles.actionIcon}>
+        <Ionicons name="attach-outline" size={24} color={colors.teal} />
+      </TouchableOpacity>
+    </View>
+  )}
+  renderCustomView={({ currentMessage }) => {
+    if (currentMessage.pendingConfirmation && currentMessage.user._id !== currentUser.uid) {
+      return (
+        <View style={{ alignItems: 'center', marginTop: 4 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => handleSessionResponse(currentMessage.sessionId, true)}
+              style={{ backgroundColor: 'green', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '600' }}>Confirm</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleSessionResponse(currentMessage.sessionId, false)}
+              style={{ backgroundColor: 'red', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '600' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    );
-  }
+      );
+    }
 
-  if (currentMessage.confirmationResult) {
-    return (
-      <View style={{ alignItems: 'center', marginTop: 4 }}>
-        <Text
-          style={{
-            color: currentMessage.confirmationResult.includes('Confirmed') ? 'green' : 'red',
-            fontWeight: '600'
-          }}
-        >
-          {currentMessage.confirmationResult}
-        </Text>
-      </View>
-    );
-  }
+    if (currentMessage.confirmationResult) {
+      return (
+        <View style={{ alignItems: 'center', marginTop: 4 }}>
+          <Text
+            style={{
+              color: currentMessage.confirmationResult.includes('Confirmed') ? 'green' : 'red',
+              fontWeight: '600',
+            }}
+          >
+            {currentMessage.confirmationResult}
+          </Text>
+        </View>
+      );
+    }
 
-  return null;
-}}
+    return null;
+  }}
+/>
 
-
-
-      />
     </View>
   );
 };
@@ -343,20 +385,42 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    paddingTop: 20,
+    paddingTop: 40,
   },
-  headerIcon: { padding: 8, paddingTop: 25 },
-  headerAvatar: { width: 40, height: 40, borderRadius: 24, backgroundColor: '#ccc' },
-  headerTitle: { flex: 1, fontSize: 22, color: '#fff', fontWeight: '600', marginLeft: 8, paddingTop: 20 },
+  headerIcon: {
+    paddingHorizontal: 8,
+  },
+  headerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#ccc',
+    marginHorizontal: 8,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 20,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
   uploadingOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 999,
-    justifyContent: 'center', alignItems: 'center',
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 999,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   inputToolbar: {
-    borderRadius: 30, borderColor: '#ddd', borderWidth: 1,
-    marginHorizontal: 8, marginBottom: 35, paddingHorizontal: 4,
-    backgroundColor: '#fff', elevation: 2, alignItems: 'center',
+    borderRadius: 30,
+    borderColor: '#ddd',
+    borderWidth: 1,
+    marginHorizontal: 8,
+    marginBottom: 35,
+    paddingHorizontal: 4,
+    backgroundColor: '#fff',
+    elevation: 2,
+    alignItems: 'center',
   },
   sendButton: {
     backgroundColor: colors.teal,
@@ -365,8 +429,14 @@ const styles = StyleSheet.create({
     marginRight: 4,
     marginBottom: 4,
   },
-  actionsContainer: { flexDirection: 'row', alignItems: 'center' },
-  actionIcon: { padding: 6 },
+  actionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionIcon: {
+    padding: 6,
+  },
 });
+
 
 export default NewChatScreen;
