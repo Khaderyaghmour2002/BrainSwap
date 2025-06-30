@@ -394,6 +394,44 @@ saveButtonText: {
   textAlign: "center",
   fontWeight: "500",
 },
+reviewerImage: {
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  marginRight: 8,
+},
+connectionsGrid: {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  justifyContent: "space-between",
+  marginTop: 8,
+},
+
+connectionItem: {
+  width: "30%",
+  alignItems: "center",
+  marginVertical: 10,
+},
+
+connectionPhoto: {
+  width: 60,
+  height: 60,
+  borderRadius: 30,
+  marginBottom: 6,
+},
+
+connectionName: {
+  fontSize: 14,
+  color: "#333",
+  textAlign: "center",
+},
+
+showMoreText: {
+  color: "#6a11cb",
+  fontWeight: "600",
+  textAlign: "center",
+  marginTop: 10,
+},
 
 
 });

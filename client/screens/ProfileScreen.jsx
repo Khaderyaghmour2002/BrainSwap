@@ -62,6 +62,11 @@ export default function ProfileScreen() {
   }, []);
 const [isBioModalVisible, setIsBioModalVisible] = useState(false);
 const [editedBio, setEditedBio] = useState(user?.bio || "");
+const [connections, setConnections] = useState([]);
+const [showAllConnections, setShowAllConnections] = useState(false);
+
+
+
   useEffect(() => {
     const fetchUserPosts = async () => {
       if (!currentUser) return;
@@ -85,22 +90,28 @@ const [editedBio, setEditedBio] = useState(user?.bio || "");
         console.error("Error fetching user posts:", error);
       }
     };
-
 const fetchReviews = async () => {
   try {
     const reviewsRef = collection(FirestoreDB, "users", currentUser.uid, "reviews");
     const snapshot = await getDocs(reviewsRef);
+
     const data = await Promise.all(
-      snapshot.docs.map(async (reviewDoc) => {
-        const review = reviewDoc.data();
-        const reviewerSnap = await getDoc(doc(FirestoreDB, "users", review.reviewerId));
+      snapshot.docs.map(async (docSnap) => {
+        const review = docSnap.data();
+        const reviewerRef = doc(FirestoreDB, "users", review.reviewerId);
+        const reviewerSnap = await getDoc(reviewerRef);
+        const firstName = reviewerSnap.data()?.firstName || "";
+        const lastName = reviewerSnap.data()?.lastName || "";
+        const fullName = `${firstName} ${lastName}`.trim();
+
         return {
           ...review,
-          reviewerName: reviewerSnap.data()?.firstName || "Anonymous",
+          reviewerName: fullName.length > 0 ? fullName : "Anonymous",
           reviewerPhoto: reviewerSnap.data()?.photoUrl || null,
         };
       })
     );
+
     setReviews(data);
   } catch (error) {
     console.error("Error fetching reviews:", error);
@@ -108,9 +119,38 @@ const fetchReviews = async () => {
 };
 
 
+const fetchConnections = async () => {
+  try {
+    const currentUser = FirebaseAuth.currentUser;
+    if (!currentUser) return;
+
+    const userRef = doc(FirestoreDB, "users", currentUser.uid);
+    const userSnap = await getDoc(userRef);
+
+    if (userSnap.exists()) {
+      const data = userSnap.data();
+      const connectionIds = data.connections || [];
+
+      // Fetch details of each connection
+      const connectionPromises = connectionIds.map(async (id) => {
+        const connSnap = await getDoc(doc(FirestoreDB, "users", id));
+        return connSnap.exists() ? { id, ...connSnap.data() } : null;
+      });
+
+      const resolvedConnections = (await Promise.all(connectionPromises)).filter(Boolean);
+      setConnections(resolvedConnections);
+    }
+  } catch (error) {
+    console.error("Error fetching connections:", error);
+  }
+};
     fetchUserPosts();
     fetchReviews();
+    fetchConnections();
+
   }, []);
+
+
 
   const choosePhotoOption = () => {
     Alert.alert("Upload Photo", "Choose an option", [
@@ -383,6 +423,42 @@ const fetchReviews = async () => {
               )}
             </View>
           </View>
+          
+<View style={styles.skillsSection}>
+  <Text style={styles.sectionTitle}>My Connections</Text>
+
+  {connections.length === 0 ? (
+    <Text style={styles.sectionText}>No connections yet.</Text>
+  ) : (
+    <View style={styles.connectionsGrid}>
+      {(showAllConnections ? connections : connections.slice(0, 6)).map((user, idx) => (
+        <TouchableOpacity
+          key={user.id || idx}
+          style={styles.connectionItem}
+          onPress={() => navigation.navigate("ProfileViewScreen", { userId: user.id })}
+        >
+          {user.photoUrl ? (
+            <Image source={{ uri: user.photoUrl }} style={styles.connectionPhoto} />
+          ) : (
+            <Ionicons name="person-circle-outline" size={60} color="#6a11cb" />
+          )}
+          <Text style={styles.connectionName}>{user.firstName || "Unnamed"}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  )}
+
+  {connections.length >6 && (
+    <TouchableOpacity onPress={() => setShowAllConnections(!showAllConnections)}>
+      <Text style={styles.showMoreText}>
+        {showAllConnections ? "Show Less" : "Show More"}
+      </Text>
+    </TouchableOpacity>
+  )}
+</View>
+
+
+
    <View style={styles.reviewsSection}>
         <Text style={styles.sectionTitle}>Reviews</Text>
         {reviews.length > 0 ? (
