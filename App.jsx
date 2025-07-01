@@ -3,8 +3,8 @@ import { Provider } from "react-native-paper"; // Ensure `react-native-paper` is
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 
-import { theme } from "./core/theme";
-import AppNavigator from "./navigation/AppNavigator"; 
+import { theme } from "./client/core/theme";
+import AppNavigator from "./client/navigation/AppNavigator"; 
 
 const Stack = createStackNavigator();
 

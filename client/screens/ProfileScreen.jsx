@@ -266,21 +266,22 @@ const calculateSkillPoints = async (userId) => {
     }
   };
 
-  const handleVerifyPrompt = (skill) => {
-    Alert.alert(
-      `Verify Skill: ${skill.name}`,
-      `This skill isn't verified yet. Would you like to take a short test to verify it now?`,
-      [
-        { text: "Not now", style: "cancel" },
-        {
-          text: "Verify Now",
-          onPress: () => {
-            navigation.navigate("SkillVerificationScreen", { skill: skill.name });
-          },
+const handleVerifyPrompt = (skill) => {
+  Alert.alert(
+    `Verify Skill: ${skill.name}`,
+    `This skill isn't verified yet. Would you like to take a short test to verify it now?`,
+    [
+      { text: "Not now", style: "cancel" },
+      {
+        text: "Verify Now",
+        onPress: () => {
+          navigation.navigate("SkillVerificationLoaderScreen", { skill: skill.name });
         },
-      ]
-    );
-  };
+      },
+    ]
+  );
+};
+
 
   const confirmDeletePost = (postId) => {
     Alert.alert("Delete Post", "Are you sure you want to delete this post?", [

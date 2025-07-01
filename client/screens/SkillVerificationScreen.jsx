@@ -23,23 +23,37 @@ export default function SkillVerificationScreen({ route, navigation }) {
   const [message, setMessage] = useState("");
   const timerRef = useRef(null);
 
-  useEffect(() => {
-    if (!skill) {
-      Alert.alert("Error", "No skill provided.");
-      navigation.goBack();
-      return;
-    }
+useEffect(() => {
+  if (!skill) {
+    Alert.alert("Error", "No skill provided.");
+    navigation.goBack();
+    return;
+  }
 
-    const quizArray = questionsData[skill];
-    if (quizArray && Array.isArray(quizArray)) {
-      setQuestions(quizArray);
-    } else {
-      Alert.alert("No Questions", `No quiz available for ${skill}`);
+  const loadQuestions = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(`quiz_${skill}`);
+      if (!stored) throw new Error("No quiz found.");
+
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        setQuestions(parsed);
+        setLoading(false);
+      } else {
+        throw new Error("Invalid quiz format.");
+      }
+    } catch (err) {
+      console.error("Failed to load quiz:", err);
+      Alert.alert("Error", "Could not load quiz. Please try again.");
       navigation.goBack();
     }
+  };
 
-    setLoading(false);
-  }, []);
+  loadQuestions();
+}, []);
+
+
+
 
   useEffect(() => {
     if (questions.length > 0) {
