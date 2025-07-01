@@ -195,68 +195,80 @@ useEffect(() => {
   };
 
   const uploadPost = async () => {
-    if (!selectedImage && !selectedFile) {
-      Alert.alert('Error', 'No file or image selected.');
+  if (!selectedImage && !selectedFile) {
+    Alert.alert('Error', 'No file or image selected.');
+    return;
+  }
+
+  try {
+    setUploading(true);
+    const currentUser = FirebaseAuth.currentUser;
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to upload.');
+      setUploading(false);
       return;
     }
 
-    try {
-      setUploading(true);
-      const currentUser = FirebaseAuth.currentUser;
-      if (!currentUser) {
-        Alert.alert('Error', 'You must be logged in to upload.');
+    const uri = selectedImage || selectedFile;
+    const blob = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.onload = () => resolve(xhr.response);
+      xhr.onerror = () => reject(new TypeError('Network request failed'));
+      xhr.responseType = 'blob';
+      xhr.open('GET', uri, true);
+      xhr.send(null);
+    });
+
+    const fileId = uuid.v4();
+    const ext = selectedFile ? fileName?.split('.').pop() : 'jpg';
+    const fileRef = ref(getStorage(), `posts/${currentUser.uid}/${fileId}.${ext}`);
+    const uploadTask = uploadBytesResumable(fileRef, blob);
+
+    uploadTask.on(
+      'state_changed',
+      null,
+      (err) => {
+        console.error('Upload failed:', err);
+        Alert.alert('Upload Error', 'File upload failed.');
         setUploading(false);
-        return;
-      }
+      },
+      async () => {
+        const downloadURL = await getDownloadURL(fileRef);
 
-      const uri = selectedImage || selectedFile;
-      const blob = await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.onload = () => resolve(xhr.response);
-        xhr.onerror = () => reject(new TypeError('Network request failed'));
-        xhr.responseType = 'blob';
-        xhr.open('GET', uri, true);
-        xhr.send(null);
-      });
-
-      const fileId = uuid.v4();
-      const ext = selectedFile ? fileName?.split('.').pop() : 'jpg';
-      const fileRef = ref(getStorage(), `posts/${currentUser.uid}/${fileId}.${ext}`);
-      const uploadTask = uploadBytesResumable(fileRef, blob);
-
-      uploadTask.on(
-        'state_changed',
-        null,
-        (err) => {
-          console.error('Upload failed:', err);
-          setUploading(false);
-        },
-        async () => {
-          const downloadURL = await getDownloadURL(fileRef);
+        try {
           await addDoc(collection(FirestoreDB, 'posts'), {
             userId: currentUser.uid,
             userName: currentUser.displayName || 'User',
-            photoUrl: currentUser.photoURL,
+            photoUrl: currentUser.photoURL || '',
             imageUrl: selectedImage ? downloadURL : '',
             fileUrl: selectedFile ? downloadURL : '',
             fileName: selectedFile ? fileName : '',
             caption: caption || '',
             createdAt: serverTimestamp(),
           });
-          setUploading(false);
-          setModalVisible(false);
-          setSelectedImage(null);
-          setSelectedFile(null);
-          setFileName('');
-          setCaption('');
-          await fetchPosts();
+
+          Alert.alert('Success', 'Post uploaded successfully.');
+        } catch (error) {
+          console.error('Error adding document to Firestore:', error);
+          Alert.alert('Error', 'Could not create Firestore post.');
         }
-      );
-    } catch (err) {
-      console.error('Error uploading post:', err);
-      setUploading(false);
-    }
-  };
+
+        setUploading(false);
+        setModalVisible(false);
+        setSelectedImage(null);
+        setSelectedFile(null);
+        setFileName('');
+        setCaption('');
+        await fetchPosts();
+      }
+    );
+  } catch (err) {
+    console.error('Error uploading post:', err);
+    Alert.alert('Error', 'Upload failed. Please try again.');
+    setUploading(false);
+  }
+};
+
 
 const PostCard = ({ item, pendingRequests, userConnections, sendRequest, navigation }) => {
   const currentUser = FirebaseAuth.currentUser;

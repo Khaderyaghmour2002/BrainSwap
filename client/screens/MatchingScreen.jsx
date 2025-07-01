@@ -184,7 +184,7 @@ export default function MatchingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F0F4F8", paddingHorizontal: 16, paddingTop: 20 },
-  title: { fontSize: 26, fontWeight: "700", color: "#222", textAlign: "center", marginTop: 20, marginBottom: 16 },
+  title: { fontSize: 26, fontWeight: "700", color: "#222", textAlign: "center", marginTop: 30, marginBottom: 16 },
   loaderContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   listContainer: { paddingBottom: 20 },
   matchCard: {
