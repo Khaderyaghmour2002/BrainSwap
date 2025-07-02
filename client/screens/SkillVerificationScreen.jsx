@@ -7,10 +7,10 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FirebaseAuth, FirestoreDB } from "../../server/firebaseConfig";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import Ionicons from "react-native-vector-icons/Ionicons";
-import questionsData from "../assets/quizData.json";
 
 export default function SkillVerificationScreen({ route, navigation }) {
   const { skill } = route.params || {};
@@ -20,40 +20,37 @@ export default function SkillVerificationScreen({ route, navigation }) {
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState(30);
-  const [message, setMessage] = useState("");
   const timerRef = useRef(null);
 
-useEffect(() => {
-  if (!skill) {
-    Alert.alert("Error", "No skill provided.");
-    navigation.goBack();
-    return;
-  }
-
-  const loadQuestions = async () => {
-    try {
-      const stored = await AsyncStorage.getItem(`quiz_${skill}`);
-      if (!stored) throw new Error("No quiz found.");
-
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) {
-        setQuestions(parsed);
-        setLoading(false);
-      } else {
-        throw new Error("Invalid quiz format.");
-      }
-    } catch (err) {
-      console.error("Failed to load quiz:", err);
-      Alert.alert("Error", "Could not load quiz. Please try again.");
+  useEffect(() => {
+    if (!skill) {
+      Alert.alert("Error", "No skill provided.");
       navigation.goBack();
+      return;
     }
-  };
 
-  loadQuestions();
-}, []);
+    const loadQuestions = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(`quiz_${skill}`);
+        if (!stored) throw new Error("No quiz found.");
 
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setQuestions(parsed);
+        } else {
+          throw new Error("Invalid quiz format.");
+        }
+      } catch (err) {
+        console.error("Failed to load quiz:", err);
+        Alert.alert("Error", "Could not load quiz. Please try again.");
+        navigation.goBack();
+      } finally {
+        setLoading(false);
+      }
+    };
 
-
+    loadQuestions();
+  }, []);
 
   useEffect(() => {
     if (questions.length > 0) {
@@ -77,66 +74,67 @@ useEffect(() => {
   };
 
   const handleAnswer = (option) => {
-  clearInterval(timerRef.current);
-  const currentQuestion = questions[currentIndex];
-  const isCorrect = option === currentQuestion?.answer;
+    clearInterval(timerRef.current);
+    const currentQuestion = questions[currentIndex];
+    const isCorrect = option === currentQuestion?.answer;
 
-  if (option === null) {
-    Alert.alert("Time's Up", "⏱ You didn't select an answer in time.");
-  }
-
-  if (isCorrect) {
-    setCorrectAnswers((prev) => prev + 1);
-  }
-
-  setSelectedOption(option);
-
-  setTimeout(async () => {
-    setSelectedOption(null);
-    if (currentIndex + 1 < questions.length) {
-      setCurrentIndex((prev) => prev + 1);
-    } else {const finalScore = isCorrect ? correctAnswers + 1 : correctAnswers;
-const isSkillVerified = finalScore >= 4;
-
-if (isSkillVerified) {
-  try {
-    const currentUser = FirebaseAuth.currentUser;
-    const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
-    const userSnap = await getDoc(userDocRef);
-
-    if (userSnap.exists()) {
-      const userData = userSnap.data();
-      const updatedSkills = userData.skillsToTeach.map((skillObj) => {
-        if (skillObj.name === skill) {
-          return { ...skillObj, verified: true };
-        }
-        return skillObj;
-      });
-
-      await updateDoc(userDocRef, {
-        skillsToTeach: updatedSkills,
-      });
-
-      Alert.alert(
-        "🎉 Verified!",
-        `You answered ${finalScore} out of ${questions.length} correctly.\nYour skill has been verified!`,
-        [{ text: "Done", onPress: () => navigation.goBack() }]
-      );
+    if (option === null) {
+      Alert.alert("Time's Up", "⏱ You didn't select an answer in time.");
     }
-  } catch (error) {
-    console.error("Error verifying skill:", error);
-    Alert.alert("Error", "Could not update skill verification. Please try again.");
-  }
-} else {
-  Alert.alert(
-    "Not Verified",
-    `You answered ${finalScore} out of ${questions.length}.\nTry again to verify the skill.`,
-    [{ text: "Done", onPress: () => navigation.goBack() }]
-  );
-}
-}
-  }, 1000);
-};
+
+    if (isCorrect) {
+      setCorrectAnswers((prev) => prev + 1);
+    }
+
+    setSelectedOption(option);
+
+    setTimeout(async () => {
+      setSelectedOption(null);
+      if (currentIndex + 1 < questions.length) {
+        setCurrentIndex((prev) => prev + 1);
+      } else {
+        const finalScore = isCorrect ? correctAnswers + 1 : correctAnswers;
+        const isSkillVerified = finalScore >= 4;
+
+        if (isSkillVerified) {
+          try {
+            const currentUser = FirebaseAuth.currentUser;
+            const userDocRef = doc(FirestoreDB, "users", currentUser.uid);
+            const userSnap = await getDoc(userDocRef);
+
+            if (userSnap.exists()) {
+              const userData = userSnap.data();
+              const updatedSkills = userData.skillsToTeach.map((skillObj) => {
+                if (skillObj.name === skill) {
+                  return { ...skillObj, verified: true };
+                }
+                return skillObj;
+              });
+
+              await updateDoc(userDocRef, {
+                skillsToTeach: updatedSkills,
+              });
+
+              Alert.alert(
+                "🎉 Verified!",
+                `You answered ${finalScore} out of ${questions.length} correctly.\nYour skill has been verified!`,
+                [{ text: "Done", onPress: () => navigation.goBack() }]
+              );
+            }
+          } catch (error) {
+            console.error("Error verifying skill:", error);
+            Alert.alert("Error", "Could not update skill verification. Please try again.");
+          }
+        } else {
+          Alert.alert(
+            "Not Verified",
+            `You answered ${finalScore} out of ${questions.length}.\nTry again to verify the skill.`,
+            [{ text: "Done", onPress: () => navigation.goBack() }]
+          );
+        }
+      }
+    }, 1000);
+  };
 
   if (loading || questions.length === 0) {
     return (
@@ -164,17 +162,12 @@ if (isSkillVerified) {
         </Text>
       </View>
 
-      {message !== "" && (
-        <Text style={styles.messageText}>{message}</Text>
-      )}
-
       <Text style={styles.questionText}>{currentQuestion.question}</Text>
 
       {currentQuestion.options.map((option, index) => {
         const isSelected = selectedOption === option;
         const isCorrect = selectedOption && option === currentQuestion.answer;
-        const isWrong =
-          selectedOption === option && selectedOption !== currentQuestion.answer;
+        const isWrong = selectedOption === option && !isCorrect;
 
         return (
           <TouchableOpacity
@@ -208,7 +201,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   header: {
-    marginTop: 14,
+    marginTop: 25,
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 16,
@@ -233,13 +226,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     color: "#43a047",
-  },
-  messageText: {
-    color: "#d32f2f",
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 10,
-    textAlign: "center",
   },
   questionText: {
     fontSize: 18,

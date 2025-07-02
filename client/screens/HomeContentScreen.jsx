@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import uuid from 'react-native-uuid';
-import { collection, addDoc, getDocs, serverTimestamp, query, orderBy,where,doc,setDoc,getDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, serverTimestamp, query, orderBy,where,doc,setDoc,getDoc,deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, getStorage } from 'firebase/storage';
 import { FirestoreDB, FirebaseAuth } from '../../server/firebaseConfig';
 import { colors } from '../assets/constants';
@@ -47,25 +47,37 @@ const fetchCurrentUserData = async () => {
   }
 };
 
-  const fetchPosts = async () => {
+const fetchPosts = async () => {
   try {
     const currentUser = FirebaseAuth.currentUser;
     if (!currentUser) return;
 
     const q = query(collection(FirestoreDB, 'posts'), orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
-    const data = snapshot.docs
-      .map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
-      .filter(post => post.userId !== currentUser.uid); // 👈 filter out own posts
 
-    setPosts(data);
+    const postsData = await Promise.all(
+      snapshot.docs.map(async (docSnap) => {
+        const post = { id: docSnap.id, ...docSnap.data() };
+
+        // Fetch comments
+        const commentsSnap = await getDocs(collection(FirestoreDB, 'posts', post.id, 'comments'));
+        post.comments = commentsSnap.docs.map(c => c.data());
+
+        // Fetch likes
+        const likesSnap = await getDocs(collection(FirestoreDB, 'posts', post.id, 'likes'));
+        post.likes = likesSnap.docs.map(doc => doc.data());
+
+        return post;
+      })
+    );
+
+    setPosts(postsData.filter(post => post.userId !== currentUser.uid));
   } catch (err) {
     console.error('Error fetching posts:', err);
   }
 };
+
+
 fetchCurrentUserData 
 useEffect(() => {
   fetchPosts();
@@ -146,6 +158,49 @@ const sendRequest = async (targetUser) => {
   } catch (err) {
     console.error("Failed to send request:", err);
     Alert.alert("Error", "Could not send request. Try again.");
+  }
+};
+
+const toggleLike = async (postId, onComplete) => {
+  const currentUser = FirebaseAuth.currentUser;
+  if (!currentUser) return;
+
+  const likesRef = collection(FirestoreDB, 'posts', postId, 'likes');
+
+  try {
+    const existing = await getDocs(query(likesRef, where('userId', '==', currentUser.uid)));
+
+    if (!existing.empty) {
+      await deleteDoc(doc(FirestoreDB, 'posts', postId, 'likes', existing.docs[0].id));
+    } else {
+      await addDoc(likesRef, {
+        userId: currentUser.uid,
+        createdAt: serverTimestamp(),
+      });
+    }
+
+    if (onComplete) onComplete(); // 👉 refresh after
+  } catch (err) {
+    console.error('Failed to like/unlike post:', err);
+  }
+};
+const [commentInput, setCommentInput] = useState('');
+
+const addComment = async (postId) => {
+  const currentUser = FirebaseAuth.currentUser;
+  if (!currentUser || !commentInput.trim()) return;
+
+  try {
+    await addDoc(collection(FirestoreDB, 'posts', postId, 'comments'), {
+      userId: currentUser.uid,
+      userName: userData?.userName || 'User',
+      content: commentInput.trim(),
+      createdAt: serverTimestamp(),
+    });
+    setCommentInput('');
+    fetchPosts(); // optional refresh
+  } catch (err) {
+    console.error('Failed to add comment:', err);
   }
 };
 
@@ -236,16 +291,18 @@ useEffect(() => {
         const downloadURL = await getDownloadURL(fileRef);
 
         try {
-          await addDoc(collection(FirestoreDB, 'posts'), {
-            userId: currentUser.uid,
-            userName: currentUser.displayName || 'User',
-            photoUrl: currentUser.photoURL || '',
-            imageUrl: selectedImage ? downloadURL : '',
-            fileUrl: selectedFile ? downloadURL : '',
-            fileName: selectedFile ? fileName : '',
-            caption: caption || '',
-            createdAt: serverTimestamp(),
-          });
+       await addDoc(collection(FirestoreDB, 'posts'), {
+  userId: currentUser.uid,
+  userName: currentUser.displayName || 'User',
+  photoUrl: currentUser.photoURL || '',
+  imageUrl: selectedImage ? downloadURL : '',
+  fileUrl: selectedFile ? downloadURL : '',
+  fileName: selectedFile ? fileName : '',
+  caption: caption || '',
+  createdAt: serverTimestamp(),
+  likes: 0,  // 👈 ADD THIS
+});
+
 
           Alert.alert('Success', 'Post uploaded successfully.');
         } catch (error) {
@@ -270,9 +327,19 @@ useEffect(() => {
 };
 
 
-const PostCard = ({ item, pendingRequests, userConnections, sendRequest, navigation }) => {
+const PostCard = ({
+  item,
+  pendingRequests,
+  userConnections,
+  sendRequest,
+  navigation,
+  userData,
+  toggleLike,
+  commentInput,
+  setCommentInput,
+  addComment,
+}) => {
   const currentUser = FirebaseAuth.currentUser;
-
   const isSelf = currentUser?.uid === item.userId;
   const isSentPending = pendingRequests.sent.has(item.userId);
   const isReceivedPending = pendingRequests.received.has(item.userId);
@@ -344,11 +411,9 @@ const PostCard = ({ item, pendingRequests, userConnections, sendRequest, navigat
       </View>
 
       {item.caption ? <Text style={styles.caption}>{item.caption}</Text> : null}
-
       {item.imageUrl && (
         <Image source={{ uri: item.imageUrl }} style={styles.postImage} />
       )}
-
       {item.fileUrl && (
         <View style={styles.fileContainer}>
           <Ionicons name="document-text-outline" size={24} color={colors.primary} />
@@ -358,9 +423,36 @@ const PostCard = ({ item, pendingRequests, userConnections, sendRequest, navigat
           </TouchableOpacity>
         </View>
       )}
+
+      {/* ❤️ Like Button */}
+      <View style={styles.actionsRow}>
+        <TouchableOpacity onPress={() => toggleLike(item.id, item.likes || [])}>
+          <Text style={styles.likeText}>❤️ {item.likes?.length || 0}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 💬 Comment Section */}
+      <View style={styles.commentSection}>
+        {(item.comments || []).slice(0, 2).map((c, index) => (
+          <Text key={index} style={styles.comment}>
+            <Text style={{ fontWeight: 'bold' }}>{c.userName}: </Text>
+            {c.content}
+          </Text>
+        ))}
+
+        <TextInput
+          value={commentInput}
+          onChangeText={setCommentInput}
+          placeholder="Add a comment..."
+          placeholderTextColor="#999"
+          style={styles.commentInput}
+          onSubmitEditing={() => addComment(item.id)}
+        />
+      </View>
     </View>
   );
 };
+
 
 
 
@@ -386,7 +478,7 @@ const PostCard = ({ item, pendingRequests, userConnections, sendRequest, navigat
 
       {loading && <ActivityIndicator size="large" color={colors.teal} style={{ marginTop: 10 }} />}
 
-      <FlatList
+    <FlatList
   data={posts}
   keyExtractor={(item) => item.id}
   renderItem={({ item }) => (
@@ -396,10 +488,19 @@ const PostCard = ({ item, pendingRequests, userConnections, sendRequest, navigat
       userConnections={userConnections}
       sendRequest={sendRequest}
       navigation={navigation}
+      userData={userData}
+      toggleLike={toggleLike}
+      commentInput={commentInput}
+      setCommentInput={setCommentInput}
+      addComment={addComment}
     />
   )}
   contentContainerStyle={{ paddingBottom: 100 }}
+  refreshControl={
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+  }
 />
+
 
 
       <Modal visible={modalVisible} animationType="slide">
@@ -643,4 +744,30 @@ connectText: {
   fontWeight: '600',
   fontSize: 15,
 },
+actionsRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingVertical: 8,
+},
+likeText: {
+  fontSize: 16,
+  color: 'red',
+  marginRight: 10,
+},
+commentSection: {
+  paddingHorizontal: 12,
+  paddingBottom: 12,
+},
+comment: {
+  fontSize: 14,
+  marginTop: 4,
+},
+commentInput: {
+  borderColor: '#ccc',
+  borderWidth: 1,
+  padding: 6,
+  borderRadius: 6,
+  marginTop: 8,
+},
+
 });

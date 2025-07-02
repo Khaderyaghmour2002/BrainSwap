@@ -13,35 +13,29 @@ export default function SkillVerificationLoaderScreen({ route }) {
   }, []);
 
   const generateAndSaveQuestions = async () => {
-    console.log("🟡 [Loader] Started quiz generation for skill:", skill);
-
     try {
-      console.log("🟢 [Loader] Sending request to backend...");
+      const response = await axios.post(
+        "http://172.20.10.13:8000/api/generate-quiz",
+        { skill },
+        { timeout: 30000 }
+      );
 
-      const response = await axios.post("http:// 192.168.136.1:8000/api/generate-quiz", {
-        skill,
-      }, {
-        timeout: 20000,
-      });
-
-      console.log("✅ [Loader] Received response from backend:", response.data);
-
-      const questionObj = response.data.question;
-
-      if (!questionObj || !questionObj.question || !questionObj.options) {
-        throw new Error("Invalid quiz format.");
+      if (!response.data.questions || !Array.isArray(response.data.questions)) {
+        throw new Error("Invalid response format from server");
       }
 
-      console.log("📦 [Loader] Storing question in AsyncStorage...");
+      // Save to AsyncStorage
+      await AsyncStorage.setItem(
+        `quiz_${skill}`,
+        JSON.stringify(response.data.questions)
+      );
 
-      await AsyncStorage.setItem(`quiz_${skill}`, JSON.stringify([questionObj]));
-
-      console.log("🚀 [Loader] Navigating to SkillVerificationScreen...");
+      // Navigate to the quiz screen
       navigation.replace("SkillVerificationScreen", { skill });
 
     } catch (err) {
-      console.error("❌ [Loader] Failed to generate quiz:", err);
-      Alert.alert("Error", "Failed to generate quiz. Please try again later.");
+      console.error("❌ Axios error:", err.message || err);
+      Alert.alert("Error", "Failed to generate quiz. Please try again.");
       navigation.goBack();
     }
   };

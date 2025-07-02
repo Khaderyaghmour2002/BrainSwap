@@ -1,34 +1,52 @@
-{
-  "JavaScript": [
-    {
-      "question": "What is the result of `typeof null` in JavaScript?",
-      "options": ["null", "object", "undefined", "number"],
-      "answer": "object"
-    },
-    {
-      "question": "Which of the following is NOT a primitive type in JavaScript?",
-      "options": ["String", "Number", "Boolean", "Array"],
-      "answer": "Array"
-    },
-    {
-      "question": "What does the `===` operator do in JavaScript?",
-      "options": [
-        "Assigns a value",
-        "Compares value and type",
-        "Compares only value",
-        "Checks truthiness"
-      ],
-      "answer": "Compares value and type"
-    },
-    {
-      "question": "Which method is used to parse a JSON string into a JavaScript object?",
-      "options": ["JSON.stringify()", "JSON.parse()", "parseJSON()", "toObject()"],
-      "answer": "JSON.parse()"
-    },
-    {
-      "question": "What will `console.log(0.1 + 0.2 === 0.3)` print?",
-      "options": ["true", "false", "undefined", "NaN"],
-      "answer": "false"
-    }
-  ]
-}
+[
+  {
+    "question": "What is Node.js?",
+    "options": [
+      "A runtime environment for executing JavaScript code outside of a browser",
+      "A front-end framework",
+      "A database management system",
+      "A programming language"
+    ],
+    "answer": "A runtime environment for executing JavaScript code outside of a browser"
+  },
+  {
+    "question": "Which programming language is primarily used in Node.js?",
+    "options": [
+      "Java",
+      "Python",
+      "JavaScript",
+      "C++"
+    ],
+    "answer": "JavaScript"
+  },
+  {
+    "question": "What is the package manager used in Node.js?",
+    "options": [
+      "NPM",
+      "Yarn",
+      "Pip",
+      "Composer"
+    ],
+    "answer": "NPM"
+  },
+  {
+    "question": "Which of the following is NOT a core module in Node.js?",
+    "options": [
+      "fs",
+      "http",
+      "path",
+      "react"
+    ],
+    "answer": "react"
+  },
+  {
+    "question": "What is the main advantage of using Node.js?",
+    "options": [
+      "Single-threaded model",
+      "Asynchronous and event-driven",
+      "Limited scalability",
+      "No support for databases"
+    ],
+    "answer": "Asynchronous and event-driven"
+  }
+]

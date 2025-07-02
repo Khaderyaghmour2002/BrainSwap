@@ -5,22 +5,22 @@
     "version": "1.0.0",
     "sdkVersion": "53.0.0",
     "jsEngine": "jsc",
-    "platforms": [
-      "ios",
-      "android"
-    ],
+    "platforms": ["ios", "android"],
     "android": {
       "package": "com.anonymous.brainswap"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "c113a607-9a71-4f7e-adcc-cad653228ea0"
-      }
     },
     "ios": {
       "bundleIdentifier": "com.anonymous.brainswap",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "c113a607-9a71-4f7e-adcc-cad653228ea0"
       }
     }
   }

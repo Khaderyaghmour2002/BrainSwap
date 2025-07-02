@@ -12,12 +12,18 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_KOTLIN_VERSION": "1.8.22"
       }
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_KOTLIN_VERSION": "1.8.22"
       }
     }
   },
