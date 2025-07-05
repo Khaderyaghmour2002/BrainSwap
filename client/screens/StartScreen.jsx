@@ -39,7 +39,7 @@ export default function StartScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  Paragraph: {
+  paragraph: {
     marginBottom: 24,
     textAlign: "center",
     color: theme.colors.text,
