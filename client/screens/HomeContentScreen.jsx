@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState,useMemo } from 'react';
 import {
   View, Text, FlatList, Image, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Modal,
-  Alert, RefreshControl, KeyboardAvoidingView, ScrollView, Platform, Linking
+  Alert, RefreshControl, KeyboardAvoidingView, ScrollView, Platform, Linking, 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -29,6 +29,8 @@ const [pendingRequests, setPendingRequests] = useState({ sent: new Set(), receiv
 const [connections, setConnections] = useState(new Set());
 const [userData, setUserData] = useState(null);
 const [userConnections, setUserConnections] = useState(new Set());
+const [searchText, setSearchText] = useState('');
+
 const fetchCurrentUserData = async () => {
   try {
     const currentUser = FirebaseAuth.currentUser;
@@ -325,6 +327,13 @@ useEffect(() => {
     setUploading(false);
   }
 };
+const filteredPosts = useMemo(() => {
+  const lower = searchText.toLowerCase();
+  return posts.filter(post =>
+    post.caption?.toLowerCase().includes(lower) ||
+    post.userName?.toLowerCase().includes(lower)
+  );
+}, [searchText, posts]);
 
 
 const PostCard = ({
@@ -424,31 +433,46 @@ const PostCard = ({
         </View>
       )}
 
-      {/* ❤️ Like Button */}
-      <View style={styles.actionsRow}>
-        <TouchableOpacity onPress={() => toggleLike(item.id, item.likes || [])}>
-          <Text style={styles.likeText}>❤️ {item.likes?.length || 0}</Text>
-        </TouchableOpacity>
-      </View>
+  {/* ❤️ + 💬 Actions Row */}
+<View style={styles.actionsRow}>
+  <TouchableOpacity
+    style={styles.actionButton}
+    onPress={() => toggleLike(item.id, item.likes || [])}
+  >
+    <Ionicons name="heart-outline" size={20} color="red" style={{ marginRight: 4 }} />
+    <Text style={styles.actionText}>{item.likes?.length || 0} Likes</Text>
+  </TouchableOpacity>
 
-      {/* 💬 Comment Section */}
-      <View style={styles.commentSection}>
-        {(item.comments || []).slice(0, 2).map((c, index) => (
-          <Text key={index} style={styles.comment}>
-            <Text style={{ fontWeight: 'bold' }}>{c.userName}: </Text>
-            {c.content}
-          </Text>
-        ))}
+  <TouchableOpacity style={styles.actionButton}>
+    <Ionicons name="chatbubble-outline" size={20} color="#444" style={{ marginRight: 4 }} />
+    <Text style={styles.actionText}>{item.comments?.length || 0} Comments</Text>
+  </TouchableOpacity>
+</View>
 
-        <TextInput
-          value={commentInput}
-          onChangeText={setCommentInput}
-          placeholder="Add a comment..."
-          placeholderTextColor="#999"
-          style={styles.commentInput}
-          onSubmitEditing={() => addComment(item.id)}
-        />
-      </View>
+{/* 💬 Comments Section */}
+<View style={styles.commentSection}>
+  {(item.comments || []).slice(0, 2).map((c, index) => (
+    <Text key={index} style={styles.comment}>
+      <Text style={{ fontWeight: 'bold' }}>{c.userName}: </Text>
+      {c.content}
+    </Text>
+  ))}
+
+  {/* ✏️ Input for new comment */}
+  <View style={styles.commentInputRow}>
+    <TextInput
+      value={commentInput}
+      onChangeText={setCommentInput}
+      placeholder="Write a comment..."
+      placeholderTextColor="#999"
+      style={styles.commentInputText}
+    />
+    <TouchableOpacity onPress={() => addComment(item.id)}>
+      <Ionicons name="send" size={22} color={colors.primary} />
+    </TouchableOpacity>
+  </View>
+</View>
+
     </View>
   );
 };
@@ -477,6 +501,16 @@ const PostCard = ({
       </View>
 
       {loading && <ActivityIndicator size="large" color={colors.teal} style={{ marginTop: 10 }} />}
+<View style={styles.searchContainer}>
+  <Ionicons name="search-outline" size={20} color="#888" />
+  <TextInput
+    placeholder="Search people, or skills..."
+    value={searchText}
+    onChangeText={setSearchText}
+    style={styles.searchInput}
+    placeholderTextColor="#888"
+  />
+</View>
 
     <FlatList
   data={posts}
@@ -769,5 +803,52 @@ commentInput: {
   borderRadius: 6,
   marginTop: 8,
 },
+actionButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginRight: 16,
+},
+
+actionText: {
+  fontSize: 14,
+  color: '#333',
+},
+
+commentInputRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginTop: 8,
+  borderWidth: 1,
+  borderColor: '#ccc',
+  borderRadius: 8,
+  paddingHorizontal: 10,
+  paddingVertical: Platform.OS === 'ios' ? 8 : 4,
+},
+
+commentInputText: {
+  flex: 1,
+  fontSize: 14,
+  color: '#333',
+  marginRight: 8,
+},
+searchContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#f2f2f2',
+  borderRadius: 12,
+  marginHorizontal: 16,
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  marginBottom: 10,
+  marginTop: 10,
+},
+
+searchInput: {
+  marginLeft: 8,
+  fontSize: 14,
+  flex: 1,
+  color: '#333',
+}
+
 
 });

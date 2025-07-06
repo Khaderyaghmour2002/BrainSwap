@@ -189,6 +189,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderTopColor: "#ccc",
     borderTopWidth: 1,
+    //marginBottom: 10,
   },
   bottomBarButton: {
     flex: 1,
@@ -207,6 +208,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#333",
     paddingVertical: 4,
+    //marginBottom: 5,
   },
   /* Extra bold text on active tab */
   moreBoldText: {

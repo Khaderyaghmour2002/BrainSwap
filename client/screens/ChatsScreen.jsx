@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { Swipeable } from 'react-native-gesture-handler';
+
 import {
   Text,
   View,
@@ -11,6 +13,7 @@ import {
   FlatList,
   Modal,
   Image,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -24,6 +27,7 @@ import {
   orderBy,
   getDocs,
   getDoc,
+  deleteDoc,
 } from 'firebase/firestore';
 
 import { FirebaseAuth, FirestoreDB } from '../../server/firebaseConfig';
@@ -37,12 +41,37 @@ const ChatsScreen = ({ setUnreadCount = () => {} }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const currentUser = FirebaseAuth.currentUser;
   const [userPhotos, setUserPhotos] = useState({});
+const [searchText, setSearchText] = useState('');
+const [filteredChats, setFilteredChats] = useState([]);
+const [connectionSearchText, setConnectionSearchText] = useState('');
 
  const createSession = async () => {
   if (!selectedTeachSkill || !selectedLearnSkill) {
     Alert.alert('Error', 'Please select both a teaching and learning skill.');
     return;
   }
+  const filtered = snapshot.docs.filter(chat => {
+  const otherId = chat.data().participants.find(id => id !== currentUser.uid);
+  const other = chat.data().userInfo?.find(u => u.id === otherId);
+  return other?.name?.toLowerCase().includes(searchText.toLowerCase());
+});
+
+setFilteredChats(filtered);
+
+useEffect(() => {
+  if (!searchText.trim()) {
+    setFilteredChats(chats);
+    return;
+  }
+
+  const filtered = chats.filter(chat => {
+    const otherId = chat.data().participants.find(id => id !== currentUser.uid);
+    const other = chat.data().userInfo?.find(u => u.id === otherId);
+    return other?.name?.toLowerCase().includes(searchText.toLowerCase());
+  });
+
+  setFilteredChats(filtered);
+}, [searchText, chats]);
 
   try {
     await addDoc(collection(FirestoreDB, 'sessions'), {
@@ -137,7 +166,15 @@ const ChatsScreen = ({ setUnreadCount = () => {} }) => {
 
     fetchConnections();
   }, []);
-
+const deleteChat = async (chatId) => {
+  try {
+    await deleteDoc(doc(FirestoreDB, 'chats', chatId));
+    Alert.alert("Deleted", "Chat successfully deleted.");
+  } catch (err) {
+    console.error('Error deleting chat:', err);
+    Alert.alert("Error", "Failed to delete chat.");
+  }
+};
   const getChatPreview = (chat) => {
     const lastMessage = chat.data().messages?.[0];
     if (!lastMessage) return 'Start chatting';
@@ -211,65 +248,137 @@ const ChatsScreen = ({ setUnreadCount = () => {} }) => {
           <Text>No conversations yet</Text>
         </View>
       ) : (
-        <ScrollView>
-          {chats.map(chat => {
-            const otherId = chat.data().participants.find(id => id !== currentUser.uid);
-            const other = chat.data().userInfo?.find(u => u.id === otherId);
-            return (
-              <TouchableOpacity
-                key={chat.id}
-                onPress={() => navigation.navigate('NewChatScreen', {
-                  user: {
-                    id: other?.id,
-                    firstName: other?.name,
-                    photoUrl: userPhotos[otherId],
-                    status: other?.status || 'Available',
-                  },
-                })}
-                style={styles.connectionItem}
-              >
-                <Image source={{ uri: userPhotos[otherId] }} style={styles.avatar} />
-                <View>
-                  <Text style={styles.connectionName}>{other?.name || 'Chat'}</Text>
-                  <Text style={styles.statusText}>{getChatPreview(chat)}</Text>
-                </View>
-                <Text style={styles.timestamp}>{getTimestamp(chat)}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+       <>
+  {/* 🔍 Search Bar */}
+  <TextInput
+    style={styles.searchBar1}
+    placeholder="Search chats..."
+    placeholderTextColor="#666"
+    value={searchText}
+    onChangeText={setSearchText}
+  />
+
+  <ScrollView>
+    {chats
+      .filter(chat => {
+        if (!searchText.trim()) return true; // show all if no search
+        const otherId = chat.data().participants.find(id => id !== currentUser.uid);
+        const other = chat.data().userInfo?.find(u => u.id === otherId);
+        return other?.name?.toLowerCase().includes(searchText.toLowerCase());
+      })
+      .sort((a, b) => b.data().lastUpdated - a.data().lastUpdated) // sort by newest
+      .map(chat => {
+        const otherId = chat.data().participants.find(id => id !== currentUser.uid);
+        const other = chat.data().userInfo?.find(u => u.id === otherId);
+        return (
+          <Swipeable
+  key={chat.id}  // 🔄 Move key here
+  renderRightActions={() => (
+    <TouchableOpacity
+      style={{
+        backgroundColor: 'red',
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 80,
+        height: '100%',
+      }}
+      onPress={() => {
+        Alert.alert(
+          'Delete Chat',
+          'Are you sure you want to delete this chat?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: () => deleteChat(chat.id),
+            },
+          ]
+        );
+      }}
+    >
+      <Ionicons name="trash" size={24} color="#fff" />
+    </TouchableOpacity>
+  )}
+>
+  <TouchableOpacity
+    onPress={() =>
+      navigation.navigate('NewChatScreen', {
+        user: {
+          id: other?.id,
+          firstName: other?.name,
+          photoUrl: userPhotos[otherId],
+          status: other?.status || 'Available',
+        },
+      })
+    }
+    style={styles.connectionItem}
+  >
+    <Image source={{ uri: userPhotos[otherId] }} style={styles.avatar} />
+    <View>
+      <Text style={styles.connectionName}>{other?.name || 'Chat'}</Text>
+      <Text style={styles.statusText}>{getChatPreview(chat)}</Text>
+    </View>
+    <Text style={styles.timestamp}>{getTimestamp(chat)}</Text>
+  </TouchableOpacity>
+</Swipeable>
+
+        );
+      })}
+  </ScrollView>
+</>
+
       )}
 
       <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
         <Ionicons name="chatbubble-ellipses-outline" size={26} color="#fff" />
       </TouchableOpacity>
+<Modal visible={modalVisible} animationType="slide" onRequestClose={() => setModalVisible(false)}>
+  <View style={styles.modalContainer}>
+    {/* 🔻 Header */}
+    <View style={styles.modalHeader}>
+      <TouchableOpacity onPress={() => setModalVisible(false)}>
+        <Ionicons name="arrow-back" size={24} color="#fff" />
+      </TouchableOpacity>
+      <View style={styles.titleGroup}>
+        <Text style={styles.modalTitle}>Select contact</Text>
+        <Text style={styles.subtitle}>{connections.length} contacts</Text>
+      </View>
+    </View>
 
-      <Modal visible={modalVisible} animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={() => setModalVisible(false)}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <View style={styles.titleGroup}>
-            <Text style={styles.modalTitle}>Select contact</Text>
-            <Text style={styles.subtitle}>{connections.length} contacts</Text>
+    {/* 🔍 Search */}
+    <TextInput
+      placeholder="Search contacts..."
+      placeholderTextColor="#999"
+      value={connectionSearchText}
+      onChangeText={setConnectionSearchText}
+      style={styles.searchBar}
+    />
+
+    {/* 👥 List */}
+    <FlatList
+      data={connections.filter(item =>
+        item.firstName?.toLowerCase().includes(connectionSearchText.toLowerCase())
+      )}
+      keyExtractor={(item) => item.id}
+      style={styles.modalList}
+      contentContainerStyle={{ paddingBottom: 100 }}
+      renderItem={({ item }) => (
+        <TouchableOpacity
+          style={styles.connectionItem}
+          onPress={() => startNewChat(item)}
+        >
+          <Image source={{ uri: item.photoUrl }} style={styles.avatar} />
+          <View>
+            <Text style={styles.connectionName}>{item.firstName}</Text>
+            <Text style={styles.statusText}>{item.status || 'Available'}</Text>
           </View>
-        </View>
+        </TouchableOpacity>
+      )}
+    />
+  </View>
+</Modal>
 
-        <FlatList
-          data={connections}
-          keyExtractor={(item) => item.id}
-          style={styles.modalList}
-          renderItem={({ item }) => (
-            <TouchableOpacity style={styles.connectionItem} onPress={() => startNewChat(item)}>
-              <Image source={{ uri: item.photoUrl }} style={styles.avatar} />
-              <View>
-                <Text style={styles.connectionName}>{item.firstName}</Text>
-                <Text style={styles.statusText}>{item.status || 'Available'}</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-        />
-      </Modal>
     </Pressable>
   );
 };
@@ -316,7 +425,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   connectionItem: {
-    marginTop: 30,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -344,6 +452,99 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#aaa',
   },
+  searchBar: {
+  backgroundColor: '#f0f0f0',
+  margin: 8,
+  padding: 10,
+  borderRadius: 10,
+  fontSize: 14,
+  color: '#333',
+  marginTop:50,
+},
+searchBar1: {
+  backgroundColor: '#f0f0f0',
+  marginHorizontal: 16,
+  marginTop: 45,
+  padding: 10,
+  borderRadius: 10,
+  fontSize: 14,
+  color: '#333',
+},
+modalContainer: {
+  flex: 1,
+  backgroundColor: '#fff',
+},
+
+modalHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#128C7E',
+  paddingTop: 50,
+  paddingBottom: 16,
+  paddingHorizontal: 16,
+  gap: 12,
+  elevation: 4,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.2,
+  shadowRadius: 4,
+},
+
+titleGroup: { flex: 1 },
+
+modalTitle: {
+  fontSize: 18,
+  color: '#fff',
+  fontWeight: 'bold',
+},
+
+subtitle: {
+  color: '#eee',
+  fontSize: 12,
+},
+
+searchBar: {
+  backgroundColor: '#f0f0f0',
+  margin: 16,
+  padding: 12,
+  borderRadius: 12,
+  fontSize: 14,
+  color: '#333',
+},
+
+modalList: {
+  flex: 1,
+  backgroundColor: '#fff',
+},
+
+connectionItem: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 12,
+  padding: 14,
+  borderBottomColor: '#eee',
+  borderBottomWidth: 1,
+},
+
+avatar: {
+  width: 44,
+  height: 44,
+  borderRadius: 22,
+  backgroundColor: '#ccc',
+},
+
+connectionName: {
+  fontSize: 16,
+  fontWeight: 'bold',
+  color: '#333',
+},
+
+statusText: {
+  fontSize: 12,
+  color: '#666',
+},
+
+
 });
 
 export default ChatsScreen;

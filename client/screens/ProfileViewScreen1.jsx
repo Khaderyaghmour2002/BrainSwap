@@ -23,6 +23,8 @@
     query,
     orderBy,
     where,
+    updateDoc,
+    arrayRemove,
   } from "firebase/firestore";
   import { FirestoreDB, FirebaseAuth } from "../../server/firebaseConfig";
 
@@ -35,6 +37,7 @@
     const [alreadyReviewed, setAlreadyReviewed] = useState(false);
     const [reviews, setReviews] = useState([]);
     const [userPosts, setUserPosts] = useState([]);
+const [menuVisible, setMenuVisible] = useState(false);
 
     useEffect(() => {
       const fetchUser = async () => {
@@ -115,7 +118,61 @@
         </Text>
       );
     }
+const removeConnection = async (otherUserId) => {
+  const currentUser = FirebaseAuth.currentUser;
+  if (!currentUser || !otherUserId) return;
 
+  try {
+    const userRef = doc(FirestoreDB, 'users', currentUser.uid);
+    const otherRef = doc(FirestoreDB, 'users', otherUserId);
+
+    await updateDoc(userRef, {
+      connections: arrayRemove(otherUserId), // remove from current user's array
+    });
+
+    await updateDoc(otherRef, {
+      connections: arrayRemove(currentUser.uid), // remove from other user's array
+    });
+
+    Alert.alert("Removed", "Connection successfully removed.");
+  } catch (err) {
+    console.error("Error removing connection:", err);
+    Alert.alert("Error", "Failed to remove the connection.");
+  }
+};
+
+const blockUser = async (otherUserId) => {
+  const currentUser = FirebaseAuth.currentUser;
+  if (!currentUser || !otherUserId) return;
+
+  try {
+    // Block each other
+    await setDoc(doc(FirestoreDB, 'users', currentUser.uid, 'blocked', otherUserId), {
+      blockedAt: serverTimestamp(),
+    });
+
+    await setDoc(doc(FirestoreDB, 'users', otherUserId, 'blocked', currentUser.uid), {
+      blockedAt: serverTimestamp(),
+    });
+
+    // Remove connection from both
+    const userRef = doc(FirestoreDB, 'users', currentUser.uid);
+    const otherRef = doc(FirestoreDB, 'users', otherUserId);
+
+    await updateDoc(userRef, {
+      connections: arrayRemove(otherUserId),
+    });
+
+    await updateDoc(otherRef, {
+      connections: arrayRemove(currentUser.uid),
+    });
+
+    Alert.alert("Blocked", "User has been blocked and removed from connections.");
+  } catch (err) {
+    console.error("Error blocking user:", err);
+    Alert.alert("Error", "Failed to block user.");
+  }
+};
     return (
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -123,9 +180,42 @@
         keyboardVerticalOffset={100}
       >
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-          <TouchableOpacity style={styles.backIcon} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={26} color="#6a11cb" />
-          </TouchableOpacity>
+     <View style={styles.headerRow}>
+  <TouchableOpacity onPress={() => navigation.goBack()}>
+    <Ionicons name="arrow-back" size={26} color="#6a11cb" />
+  </TouchableOpacity>
+
+  <TouchableOpacity onPress={() => setMenuVisible(!menuVisible)}>
+    <Ionicons name="ellipsis-vertical" size={24} color="#6a11cb" />
+  </TouchableOpacity>
+</View>
+
+{menuVisible && (
+  <View style={styles.dropdownMenu}>
+    <TouchableOpacity
+      style={styles.dropdownItem}
+      onPress={() => {
+        setMenuVisible(false);
+        removeConnection(userId);
+      }}
+    >
+      <Text style={styles.dropdownText}>Remove Contact</Text>
+    </TouchableOpacity>
+    <TouchableOpacity
+      style={styles.dropdownItem}
+      onPress={() => {
+        setMenuVisible(false);
+        Alert.alert("Block User", "Are you sure you want to block this user?", [
+          { text: "Cancel" },
+          { text: "Block", onPress: () => blockUser(userId) },
+        ]);
+      }}
+    >
+      <Text style={styles.dropdownText}>Block User</Text>
+    </TouchableOpacity>
+  </View>
+)}
+
 
           <View style={styles.profileCard}>
             <Image
@@ -466,4 +556,73 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     resizeMode: "cover",
   },
+  menuWrapper: {
+  position: 'absolute',
+  top: 25,
+  right: 20,
+  zIndex: 10,
+    paddingTop: 16,
+
+},
+
+dropdownMenu: {
+  position: 'absolute',
+  top: 30,
+  right: 0,
+  backgroundColor: '#fff',
+  borderRadius: 8,
+  paddingVertical: 8,
+  paddingHorizontal: 12,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.2,
+  shadowRadius: 4,
+  elevation: 5,
+  
+},
+
+dropdownItem: {
+  paddingVertical: 6,
+},
+
+dropdownText: {
+  fontSize: 14,
+  color: '#333',
+},
+headerRow: {
+  width: "100%",
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  paddingHorizontal: 10,
+  marginTop: 20,
+  marginBottom: 10,
+},
+
+dropdownMenu: {
+  position: 'absolute',
+  top: 60,
+  right: 20,
+  backgroundColor: '#fff',
+  borderRadius: 8,
+  paddingVertical: 8,
+  paddingHorizontal: 12,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.2,
+  shadowRadius: 4,
+  elevation: 6,
+  zIndex: 1000,
+},
+
+dropdownItem: {
+  paddingVertical: 8,
+},
+
+dropdownText: {
+  fontSize: 14,
+  color: '#333',
+}
+
+
 });
