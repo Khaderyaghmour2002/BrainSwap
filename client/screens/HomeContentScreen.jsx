@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import uuid from 'react-native-uuid';
-import { collection, addDoc, getDocs, serverTimestamp, query, orderBy,where,doc,setDoc,getDoc,deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, serverTimestamp, query, orderBy,where,doc,setDoc,getDoc,deleteDoc,item } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, getStorage } from 'firebase/storage';
 import { FirestoreDB, FirebaseAuth } from '../../server/firebaseConfig';
 import { colors } from '../assets/constants';
@@ -86,20 +86,7 @@ useEffect(() => {
   fetchCurrentUserData(); 
 }, []);
 
-const fetchConnections = async () => {
-  try {
-    const currentUser = FirebaseAuth.currentUser;
-    if (!currentUser) return;
 
-    const snapshot = await getDocs(
-      collection(FirestoreDB, `users/${currentUser.uid}/connections`)
-    );
-    const ids = snapshot.docs.map(doc => doc.id); // Assuming each doc is the connected user's UID
-    setConnections(new Set(ids));
-  } catch (err) {
-    console.error("Error fetching connections:", err);
-  }
-};
 
   useEffect(() => {
     fetchPosts();
@@ -336,6 +323,7 @@ const filteredPosts = useMemo(() => {
 }, [searchText, posts]);
 
 
+
 const PostCard = ({
   item,
   pendingRequests,
@@ -374,7 +362,7 @@ const PostCard = ({
     };
     fetchFallbackPhoto();
   }, [item.userId]);
-
+const isLiked = item.likes?.some(like => like.userId === currentUser?.uid);
   return (
     <View style={styles.postContainer}>
       <View style={styles.postHeader}>
@@ -435,13 +423,19 @@ const PostCard = ({
 
   {/* ❤️ + 💬 Actions Row */}
 <View style={styles.actionsRow}>
-  <TouchableOpacity
-    style={styles.actionButton}
-    onPress={() => toggleLike(item.id, item.likes || [])}
-  >
-    <Ionicons name="heart-outline" size={20} color="red" style={{ marginRight: 4 }} />
-    <Text style={styles.actionText}>{item.likes?.length || 0} Likes</Text>
-  </TouchableOpacity>
+ <TouchableOpacity
+  style={styles.actionButton}
+  onPress={() => toggleLike(item.id, fetchPosts)}
+>
+  <Ionicons
+    name={isLiked ? "heart" : "heart-outline"}
+    size={20}
+    color={isLiked ? "red" : "#444"}
+    style={{ marginRight: 4 }}
+  />
+  <Text style={styles.actionText}>{item.likes?.length || 0} Likes</Text>
+</TouchableOpacity>
+
 
   <TouchableOpacity style={styles.actionButton}>
     <Ionicons name="chatbubble-outline" size={20} color="#444" style={{ marginRight: 4 }} />
