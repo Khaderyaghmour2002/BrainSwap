@@ -18,7 +18,7 @@ const LANGUAGES = [
   { id: "4", title: "German", imageSource: require("../assets/flags/germany.png") },
   { id: "5", title: "Italian", imageSource: require("../assets/flags/italy.png") },
   { id: "6", title: "Hebrew", imageSource: require("../assets/flags/israel.png") },
-  { id: "7", title: "Arabic", imageSource: require("../assets/flags/saudi.png") },
+  { id: "7", title: "Arabic", imageSource: require("../assets/flags/sudia.jpg") },
 ];
 
 export default function LanguagePickerScreen({ navigation }) {

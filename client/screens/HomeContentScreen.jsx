@@ -30,6 +30,47 @@ const [connections, setConnections] = useState(new Set());
 const [userData, setUserData] = useState(null);
 const [userConnections, setUserConnections] = useState(new Set());
 const [searchText, setSearchText] = useState('');
+const [showCommentInput, setShowCommentInput] = useState(false);
+const [searchResults, setSearchResults] = useState([]);
+
+const searchUsersBySkillOrName = async (text) => {
+  if (!text.trim()) {
+    setSearchResults([]);
+    return;
+  }
+
+  try {
+    const snapshot = await getDocs(collection(FirestoreDB, "users"));
+    const lower = text.toLowerCase();
+
+    const results = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(user => {
+        const fullName = `${user.firstName} ${user.familyName}`.toLowerCase();
+        const skillsToTeach = (user.skillsToTeach || []).map(s => s.name?.toLowerCase() || '');
+        const skillsToLearn = (user.skillsToLearn || []).map(s => s.toLowerCase());
+
+        // Match full name
+        const nameMatch = fullName.includes(lower) || fullName.startsWith(lower);
+
+        // Match skills to teach
+        const teachMatch = skillsToTeach.some(skill =>
+          skill.startsWith(lower) || skill.includes(lower)
+        );
+
+        // Match skills to learn
+        const learnMatch = skillsToLearn.some(skill =>
+          skill.startsWith(lower) || skill.includes(lower)
+        );
+
+        return nameMatch || teachMatch || learnMatch;
+      });
+
+    setSearchResults(results);
+  } catch (error) {
+    console.error("Error searching users:", error);
+  }
+};
 
 const fetchCurrentUserData = async () => {
   try {
@@ -85,6 +126,7 @@ useEffect(() => {
   fetchPosts();
   fetchCurrentUserData(); 
 }, []);
+
 
 
 
@@ -181,10 +223,11 @@ const addComment = async (postId) => {
 
   try {
     await addDoc(collection(FirestoreDB, 'posts', postId, 'comments'), {
-      userId: currentUser.uid,
-      userName: userData?.userName || 'User',
-      content: commentInput.trim(),
-      createdAt: serverTimestamp(),
+    userId: currentUser.uid,
+  fullName: userData?.firstName + ' ' + userData?.familyName || 'User',
+  photoUrl: userData?.photoUrl || '',
+  content: commentInput.trim(),
+  createdAt: serverTimestamp(),
     });
     setCommentInput('');
     fetchPosts(); // optional refresh
@@ -437,7 +480,10 @@ const isLiked = item.likes?.some(like => like.userId === currentUser?.uid);
 </TouchableOpacity>
 
 
-  <TouchableOpacity style={styles.actionButton}>
+<TouchableOpacity
+  style={styles.actionButton}
+  onPress={() => setShowCommentInput(!showCommentInput)}
+>
     <Ionicons name="chatbubble-outline" size={20} color="#444" style={{ marginRight: 4 }} />
     <Text style={styles.actionText}>{item.comments?.length || 0} Comments</Text>
   </TouchableOpacity>
@@ -445,14 +491,31 @@ const isLiked = item.likes?.some(like => like.userId === currentUser?.uid);
 
 {/* 💬 Comments Section */}
 <View style={styles.commentSection}>
-  {(item.comments || []).slice(0, 2).map((c, index) => (
-    <Text key={index} style={styles.comment}>
-      <Text style={{ fontWeight: 'bold' }}>{c.userName}: </Text>
-      {c.content}
-    </Text>
-  ))}
+  {(item.comments || []).map((c, index) => (
+  <View key={index} style={styles.commentRow}>
+    <Image
+      source={{ uri: c.photoUrl || 'https://via.placeholder.com/40' }}
+      style={styles.commentAvatar}
+    />
+    <View style={{ flex: 1 }}>
+      <View style={styles.commentHeader}>
+        <Text style={styles.commentUsername}>{c.fullName || 'User'}</Text>
+        {c.createdAt && (
+          <Text style={styles.commentTime}>
+            {moment(c.createdAt.toDate()).fromNow()}
+          </Text>
+        )}
+      </View>
+      <Text style={styles.commentContent}>{c.content}</Text>
+    </View>
+    <TouchableOpacity>
+      <Ionicons name="heart-outline" size={18} color="#999" />
+    </TouchableOpacity>
+  </View>
+))
+}
 
-  {/* ✏️ Input for new comment */}
+{showCommentInput && (
   <View style={styles.commentInputRow}>
     <TextInput
       value={commentInput}
@@ -465,7 +528,10 @@ const isLiked = item.likes?.some(like => like.userId === currentUser?.uid);
       <Ionicons name="send" size={22} color={colors.primary} />
     </TouchableOpacity>
   </View>
+)}
+
 </View>
+
 
     </View>
   );
@@ -484,14 +550,24 @@ const isLiked = item.likes?.some(like => like.userId === currentUser?.uid);
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Brain Swap</Text>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableOpacity onPress={pickImage}>
-            <Ionicons name="image-outline" size={28} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={pickDocument}>
-            <Ionicons name="attach-outline" size={28} color="#fff" />
-          </TouchableOpacity>
-        </View>
+       <TouchableOpacity
+  onPress={() =>
+    Alert.alert(
+      'Create Post',
+      'Choose what you want to upload',
+      [
+        { text: 'Photo', onPress: pickImage },
+        { text: 'Document', onPress: pickDocument },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+      { cancelable: true }
+    )
+  }
+>
+  <Ionicons name="add-circle-outline" size={30} color="#fff" />
+</TouchableOpacity>
+
+
       </View>
 
       {loading && <ActivityIndicator size="large" color={colors.teal} style={{ marginTop: 10 }} />}
@@ -499,35 +575,72 @@ const isLiked = item.likes?.some(like => like.userId === currentUser?.uid);
   <Ionicons name="search-outline" size={20} color="#888" />
   <TextInput
     placeholder="Search people, or skills..."
-    value={searchText}
-    onChangeText={setSearchText}
-    style={styles.searchInput}
     placeholderTextColor="#888"
+    value={searchText}
+    onChangeText={(text) => {
+      setSearchText(text);
+      searchUsersBySkillOrName(text); // 🔍 Trigger live search here
+    }}
+    style={styles.searchInput}
   />
 </View>
 
-    <FlatList
-  data={posts}
-  keyExtractor={(item) => item.id}
-  renderItem={({ item }) => (
-    <PostCard
-      item={item}
-      pendingRequests={pendingRequests}
-      userConnections={userConnections}
-      sendRequest={sendRequest}
-      navigation={navigation}
-      userData={userData}
-      toggleLike={toggleLike}
-      commentInput={commentInput}
-      setCommentInput={setCommentInput}
-      addComment={addComment}
-    />
-  )}
-  contentContainerStyle={{ paddingBottom: 100 }}
-  refreshControl={
-    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-  }
-/>
+{searchText.trim() !== '' ? (
+  <FlatList
+    data={searchResults}
+    keyExtractor={(item) => item.id}
+    renderItem={({ item }) => (
+      <TouchableOpacity
+        onPress={() => navigation.navigate('ProfileViewScreen', { userId: item.id })}
+        style={styles.searchUserRow}
+      >
+        <Image
+          source={{ uri: item.photoUrl || 'https://via.placeholder.com/40' }}
+          style={styles.avatar}
+        />
+        <View style={{ marginLeft: 10, flex: 1 }}>
+          <Text style={styles.userName}>
+            {item.firstName} {item.familyName}
+          </Text>
+          <Text style={styles.userSkill}>
+            📚 Wants to learn: {(item.skillsToLearn || []).join(', ')}
+          </Text>
+          <Text style={styles.userSkill}>
+            🎓 Can teach: {(item.skillsToTeach || []).map(s => s.name).join(', ')}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    )}
+    ListEmptyComponent={() => (
+      <Text style={{ textAlign: 'center', marginTop: 20, color: '#999' }}>No results found</Text>
+    )}
+    contentContainerStyle={{ paddingBottom: 80 }}
+  />
+) : (
+  <FlatList
+    data={posts}
+    keyExtractor={(item) => item.id}
+    renderItem={({ item }) => (
+      <PostCard
+        item={item}
+        pendingRequests={pendingRequests}
+        userConnections={userConnections}
+        sendRequest={sendRequest}
+        navigation={navigation}
+        userData={userData}
+        toggleLike={toggleLike}
+        commentInput={commentInput}
+        setCommentInput={setCommentInput}
+        addComment={addComment}
+      />
+    )}
+    contentContainerStyle={{ paddingBottom: 100 }}
+    refreshControl={
+      <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+    }
+  />
+)}
+
 
 
 
@@ -842,7 +955,93 @@ searchInput: {
   fontSize: 14,
   flex: 1,
   color: '#333',
-}
+},
+commentRow: {
+  flexDirection: 'row',
+  alignItems: 'flex-start',
+  marginTop: 8,
+  gap: 10,
+},
+commentAvatar: {
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+  backgroundColor: '#ccc',
+},
+commentName: {
+  fontWeight: 'bold',
+  fontSize: 14,
+  color: '#333',
+},
+commentText: {
+  fontSize: 14,
+  color: '#444',
+},
+
+commentRow: {
+  flexDirection: 'row',
+  alignItems: 'flex-start',
+  marginTop: 12,
+  gap: 10,
+},
+commentAvatar: {
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+  backgroundColor: '#ccc',
+},
+commentHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+},
+commentUsername: {
+  fontWeight: '600',
+  fontSize: 14,
+  color: '#333',
+},
+commentTime: {
+  fontSize: 12,
+  color: '#999',
+},
+commentContent: {
+  fontSize: 14,
+  color: '#444',
+  marginTop: 2,
+},
+searchContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  padding: 10,
+  marginHorizontal: 16,
+  borderRadius: 8,
+  backgroundColor: '#f2f2f2',
+  marginTop: 10,
+},
+searchInput: {
+  flex: 1,
+  marginLeft: 8,
+  fontSize: 16,
+  color: '#333',
+},
+searchUserRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  padding: 10,
+  backgroundColor: '#fff',
+  borderBottomWidth: 1,
+  borderColor: '#eee',
+},
+userName: {
+  fontWeight: 'bold',
+  fontSize: 16,
+  color: '#333',
+},
+userSkill: {
+  color: '#666',
+  fontSize: 13,
+  marginTop: 2,
+},
 
 
 });

@@ -10,43 +10,43 @@
     "answer": "A runtime environment for executing JavaScript code outside of a browser"
   },
   {
-    "question": "Which programming language is primarily used in Node.js?",
-    "options": [
-      "Java",
-      "Python",
-      "JavaScript",
-      "C++"
-    ],
-    "answer": "JavaScript"
-  },
-  {
-    "question": "What is the package manager used in Node.js?",
-    "options": [
-      "NPM",
-      "Yarn",
-      "Pip",
-      "Composer"
-    ],
-    "answer": "NPM"
-  },
-  {
     "question": "Which of the following is NOT a core module in Node.js?",
     "options": [
       "fs",
       "http",
-      "path",
-      "react"
+      "react",
+      "path"
     ],
     "answer": "react"
   },
   {
-    "question": "What is the main advantage of using Node.js?",
+    "question": "What is npm?",
     "options": [
-      "Single-threaded model",
-      "Asynchronous and event-driven",
-      "Limited scalability",
-      "No support for databases"
+      "Node Package Manager",
+      "New Programming Module",
+      "Node Project Manager",
+      "Node Package Module"
     ],
-    "answer": "Asynchronous and event-driven"
+    "answer": "Node Package Manager"
+  },
+  {
+    "question": "Which event is emitted when a new client connects to a server in Node.js?",
+    "options": [
+      "clientConnected",
+      "connection",
+      "newClient",
+      "serverConnect"
+    ],
+    "answer": "connection"
+  },
+  {
+    "question": "What is the purpose of callback functions in Node.js?",
+    "options": [
+      "To handle asynchronous operations",
+      "To define CSS styles",
+      "To create animations",
+      "To validate user input"
+    ],
+    "answer": "To handle asynchronous operations"
   }
 ]
