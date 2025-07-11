@@ -1,8 +1,11 @@
-import React, { useEffect, useState,useMemo } from 'react';
+import React, { useEffect, useState,useMemo,useRef } from 'react';
 import {
   View, Text, FlatList, Image, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Modal,
-  Alert, RefreshControl, KeyboardAvoidingView, ScrollView, Platform, Linking, 
+  Alert, RefreshControl, KeyboardAvoidingView, ScrollView, Platform, Linking, SafeAreaView,
 } from 'react-native';
+import { Modalize } from 'react-native-modalize';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -13,7 +16,7 @@ import { FirestoreDB, FirebaseAuth } from '../../server/firebaseConfig';
 import { colors } from '../assets/constants';
 import moment from 'moment';
 import { useNavigation } from "@react-navigation/native";
-
+import styles from "../StyleSheets/HomeContentScreenStyle"; 
 export default function HomeContentScreen() {
   const navigation = useNavigation();
   const [posts, setPosts] = useState([]);
@@ -26,13 +29,22 @@ export default function HomeContentScreen() {
   const [caption, setCaption] = useState('');
   const [uploading, setUploading] = useState(false);
 const [pendingRequests, setPendingRequests] = useState({ sent: new Set(), received: new Set() });
-const [connections, setConnections] = useState(new Set());
 const [userData, setUserData] = useState(null);
 const [userConnections, setUserConnections] = useState(new Set());
 const [searchText, setSearchText] = useState('');
 const [showCommentInput, setShowCommentInput] = useState(false);
 const [searchResults, setSearchResults] = useState([]);
+const [commentModalVisible, setCommentModalVisible] = useState(false);
+const [selectedPostForComment, setSelectedPostForComment] = useState(null);
+const [modalCommentText, setModalCommentText] = useState('');
+const sheetRef = useRef(null);
+const { bottom } = useSafeAreaInsets();
 
+/* פותח את הסדין כשמשנים commentModalVisible */
+useEffect(() => {
+  if (commentModalVisible) sheetRef.current?.open();
+  else sheetRef.current?.close();
+}, [commentModalVisible]);
 const searchUsersBySkillOrName = async (text) => {
   if (!text.trim()) {
     setSearchResults([]);
@@ -210,33 +222,51 @@ const toggleLike = async (postId, onComplete) => {
       });
     }
 
-    if (onComplete) onComplete(); // 👉 refresh after
+    if (onComplete) onComplete();
   } catch (err) {
     console.error('Failed to like/unlike post:', err);
   }
 };
 const [commentInput, setCommentInput] = useState('');
-
-const addComment = async (postId) => {
+const addComment = async (postId, content) => {
   const currentUser = FirebaseAuth.currentUser;
-  if (!currentUser || !commentInput.trim()) return;
+  if (!currentUser || !content) return;
 
   try {
     await addDoc(collection(FirestoreDB, 'posts', postId, 'comments'), {
-    userId: currentUser.uid,
-  fullName: userData?.firstName + ' ' + userData?.familyName || 'User',
-  photoUrl: userData?.photoUrl || '',
-  content: commentInput.trim(),
-  createdAt: serverTimestamp(),
+      userId: currentUser.uid,
+      fullName: userData?.firstName + ' ' + userData?.familyName || 'User',
+      photoUrl: userData?.photoUrl || '',
+      content: content,
+      createdAt: serverTimestamp(),
     });
-    setCommentInput('');
-    fetchPosts(); // optional refresh
+    fetchPosts(); 
   } catch (err) {
     console.error('Failed to add comment:', err);
   }
 };
 
 
+const handleModalCommentSend = async () => {
+  const content = modalCommentText.trim();
+  const currentUser = FirebaseAuth.currentUser;
+  if (!currentUser || !content || !selectedPostForComment) return;
+
+  try {
+    await addDoc(collection(FirestoreDB, 'posts', selectedPostForComment.id, 'comments'), {
+      userId: currentUser.uid,
+      fullName: userData?.firstName + ' ' + userData?.familyName || 'User',
+      photoUrl: userData?.photoUrl || '',
+      content: content,
+      createdAt: serverTimestamp(),
+    });
+
+    setModalCommentText('');
+    fetchPosts(); // optional: refresh post list with updated comments
+  } catch (err) {
+    console.error('Failed to send comment:', err);
+  }
+};
 
 
 
@@ -332,7 +362,7 @@ useEffect(() => {
   fileName: selectedFile ? fileName : '',
   caption: caption || '',
   createdAt: serverTimestamp(),
-  likes: 0,  // 👈 ADD THIS
+  likes: 0, 
 });
 
 
@@ -385,7 +415,8 @@ const PostCard = ({
   const isReceivedPending = pendingRequests.received.has(item.userId);
   const isConnected = userConnections.has(item.userId);
 
-  const [userPhotoUrl, setUserPhotoUrl] = useState(item.photoUrl || null);
+const [userPhotoUrl, setUserPhotoUrl] = useState(item.photoUrl || null);
+
 
   useEffect(() => {
     const fetchFallbackPhoto = async () => {
@@ -482,75 +513,37 @@ const isLiked = item.likes?.some(like => like.userId === currentUser?.uid);
 
 <TouchableOpacity
   style={styles.actionButton}
-  onPress={() => setShowCommentInput(!showCommentInput)}
+  onPress={() => {
+    setSelectedPostForComment(item);
+    setCommentModalVisible(true);
+  }}
 >
-    <Ionicons name="chatbubble-outline" size={20} color="#444" style={{ marginRight: 4 }} />
-    <Text style={styles.actionText}>{item.comments?.length || 0} Comments</Text>
-  </TouchableOpacity>
-</View>
+  <Ionicons name="chatbubble-outline" size={20} color="#444" style={{ marginRight: 4 }} />
+  <Text style={styles.actionText}>{item.comments?.length || 0} Comments</Text>
+</TouchableOpacity>
 
-{/* 💬 Comments Section */}
-<View style={styles.commentSection}>
-  {(item.comments || []).map((c, index) => (
-  <View key={index} style={styles.commentRow}>
-    <Image
-      source={{ uri: c.photoUrl || 'https://via.placeholder.com/40' }}
-      style={styles.commentAvatar}
-    />
-    <View style={{ flex: 1 }}>
-      <View style={styles.commentHeader}>
-        <Text style={styles.commentUsername}>{c.fullName || 'User'}</Text>
-        {c.createdAt && (
-          <Text style={styles.commentTime}>
-            {moment(c.createdAt.toDate()).fromNow()}
-          </Text>
-        )}
-      </View>
-      <Text style={styles.commentContent}>{c.content}</Text>
-    </View>
-    <TouchableOpacity>
-      <Ionicons name="heart-outline" size={18} color="#999" />
-    </TouchableOpacity>
-  </View>
-))
-}
-
-{showCommentInput && (
-  <View style={styles.commentInputRow}>
-    <TextInput
-      value={commentInput}
-      onChangeText={setCommentInput}
-      placeholder="Write a comment..."
-      placeholderTextColor="#999"
-      style={styles.commentInputText}
-    />
-    <TouchableOpacity onPress={() => addComment(item.id)}>
-      <Ionicons name="send" size={22} color={colors.primary} />
-    </TouchableOpacity>
-  </View>
-)}
 
 </View>
+
+
+
+
 
 
     </View>
   );
 };
 
-
-
-
-
-
-
-
-
-
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
+<KeyboardAvoidingView
+  style={{ flex: 1, backgroundColor: '#fff' }}
+  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Brain Swap</Text>
-       <TouchableOpacity
+      <TouchableOpacity
+  style={styles.addButton}
   onPress={() =>
     Alert.alert(
       'Create Post',
@@ -564,8 +557,9 @@ const isLiked = item.likes?.some(like => like.userId === currentUser?.uid);
     )
   }
 >
-  <Ionicons name="add-circle-outline" size={30} color="#fff" />
+  <Ionicons name="add-circle-outline" size={38} color="#fff" />
 </TouchableOpacity>
+
 
 
       </View>
@@ -579,7 +573,7 @@ const isLiked = item.likes?.some(like => like.userId === currentUser?.uid);
     value={searchText}
     onChangeText={(text) => {
       setSearchText(text);
-      searchUsersBySkillOrName(text); // 🔍 Trigger live search here
+      searchUsersBySkillOrName(text);
     }}
     style={styles.searchInput}
   />
@@ -618,6 +612,7 @@ const isLiked = item.likes?.some(like => like.userId === currentUser?.uid);
   />
 ) : (
   <FlatList
+  
     data={posts}
     keyExtractor={(item) => item.id}
     renderItem={({ item }) => (
@@ -634,12 +629,75 @@ const isLiked = item.likes?.some(like => like.userId === currentUser?.uid);
         addComment={addComment}
       />
     )}
-    contentContainerStyle={{ paddingBottom: 100 }}
+     contentContainerStyle={{ paddingBottom: 150 }}
+  keyboardShouldPersistTaps="handled"
     refreshControl={
       <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
     }
   />
+  
 )}
+
+<Modalize
+ ref={sheetRef}
+  modalStyle={{ backgroundColor: '#fff' }}
+  handleStyle={{ backgroundColor: '#ccc', width: 40 }}
+  adjustToContentHeight={true}
+  avoidKeyboardLikeIOS={true}
+  keyboardAvoidingBehavior="padding"
+  keyboardAvoidingOffset={Platform.OS === 'ios' ? bottom : 0}
+  onClosed={() => setCommentModalVisible(false)}
+  flatListProps={{
+    data: selectedPostForComment?.comments || [],
+    keyExtractor: (_, i) => i.toString(),
+    contentContainerStyle: styles.commentList, 
+    renderItem: ({ item }) => (
+      <View style={styles.commentRow}>
+   <TouchableOpacity
+  onPress={() => {
+    if (item?.userId) {
+      navigation.navigate('ProfileViewScreen', { userId: item.userId });
+    } else {
+      console.warn('Missing userId in comment item:', item);
+    }
+  }}
+>
+  <Image
+    source={{ uri: item.photoUrl || 'https://via.placeholder.com/40' }}
+    style={styles.commentAvatar}
+  />
+</TouchableOpacity>
+
+
+        <View style={styles.commentContentWrapper}>
+          <View style={styles.commentHeaderRow}>
+            <Text style={styles.commentUsername}>{item.fullName}</Text>
+            <Text style={styles.commentTime}>
+              {moment(item.createdAt?.toDate()).fromNow()}
+            </Text>
+          </View>
+          <Text style={styles.commentText}>{item.content}</Text>
+        </View>
+      </View>
+    ),
+    ListFooterComponent: (
+      <View style={styles.inputRow}>
+        <TextInput
+          value={modalCommentText}
+          onChangeText={setModalCommentText}
+          placeholder="Write a comment..."
+          placeholderTextColor="#999"
+          style={styles.input}
+          returnKeyType="send"
+          onSubmitEditing={handleModalCommentSend}
+        />
+        <TouchableOpacity onPress={handleModalCommentSend}>
+          <Ionicons name="send" size={22} color="#2196F3" />
+        </TouchableOpacity>
+      </View>
+    )
+  }}
+/>
 
 
 
@@ -701,347 +759,7 @@ const isLiked = item.likes?.some(like => like.userId === currentUser?.uid);
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
-    </View>
+</KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  header: {
-    backgroundColor: colors.primary,
-    paddingTop: 50,
-    paddingBottom: 15,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
-  postContainer: {
-    marginVertical: 10,
-    backgroundColor: '#fafafa',
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginHorizontal: 10,
-    elevation: 2,
-  },
-  postHeader: { flexDirection: 'row', alignItems: 'center', padding: 10 },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#ccc' },
-  userName: { marginLeft: 8, fontWeight: '600', fontSize: 16 },
-  timestamp: { marginLeft: 8, fontSize: 12, color: '#777' },
-  postImage: { width: '100%', height: 300 },
-  caption: { padding: 10, fontSize: 14, color: '#333' },
-  fileContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    backgroundColor: '#f4f4f4',
-  },
-  fileName: {
-    marginLeft: 8,
-    fontSize: 14,
-    flex: 1,
-    color: '#333',
-  },
-  openFile: {
-    color: colors.teal,
-    fontWeight: '600',
-  },
-  fullModal: {
-    flex: 1,
-    backgroundColor: '#000',
-    paddingTop: 40,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-  },
-  modalTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  fullImage: {
-    width: '100%',
-    height: '60%',
-    resizeMode: 'cover',
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  captionContainer: {
-    flex: 1,
-    backgroundColor: '#111',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 16,
-  },
-  captionInputFull: {
-    color: '#fff',
-    fontSize: 16,
-    flex: 1,
-    textAlignVertical: 'top',
-  },
-  uploadButtonFull: {
-    backgroundColor: colors.primary,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  filePreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 16,
-    marginBottom: 10,
-  },
-  actionsRow: {
-  flexDirection: 'row',
-  justifyContent: 'flex-end',
-  padding: 10,
-  gap: 10,
-},
-requestButton: {
-  backgroundColor: colors.primary,
-  paddingVertical: 8,
-  paddingHorizontal: 12,
-  borderRadius: 6,
-},
-pendingButton: {
-  backgroundColor: '#ccc',
-  paddingVertical: 8,
-  paddingHorizontal: 12,
-  borderRadius: 6,
-},
-buttonText: {
-  color: '#fff',
-  fontWeight: '600',
-},
-connectIconButton: {
-  marginRight: 8,
-  backgroundColor: colors.primary,
-  width: 32,
-  height: 32,
-  borderRadius: 16,
-  justifyContent: 'center',
-  alignItems: 'center',
-},
-pendingButtonSmall: {
-  marginRight: 8,
-  backgroundColor: '#ccc',
-  width: 32,
-  height: 32,
-  borderRadius: 16,
-  justifyContent: 'center',
-  alignItems: 'center',
-},
-buttonTextSmall: {
-  fontSize: 16,
-  color: '#fff',
-},
-postHeader: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: 10,
-},
-headerLeft: {
-  flexDirection: 'row',
-  alignItems: 'center',
-},
-connectIconButton: {
-  backgroundColor: colors.primary,
-  width: 32,
-  height: 32,
-  borderRadius: 16,
-  justifyContent: 'center',
-  alignItems: 'center',
-},
-pendingButtonSmall: {
-  backgroundColor: '#ccc',
-  width: 32,
-  height: 32,
-  borderRadius: 16,
-  justifyContent: 'center',
-  alignItems: 'center',
-},
-buttonTextSmall: {
-  fontSize: 16,
-  color: '#fff',
-},
-connectButton: {
-  backgroundColor: colors.primary,
-  margin: 10,
-  paddingVertical: 8,
-  borderRadius: 8,
-  alignItems: 'center',
-},
-connectText: {
-  color: '#fff',
-  fontWeight: '600',
-  fontSize: 15,
-},
-actionsRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  paddingVertical: 8,
-},
-likeText: {
-  fontSize: 16,
-  color: 'red',
-  marginRight: 10,
-},
-commentSection: {
-  paddingHorizontal: 12,
-  paddingBottom: 12,
-},
-comment: {
-  fontSize: 14,
-  marginTop: 4,
-},
-commentInput: {
-  borderColor: '#ccc',
-  borderWidth: 1,
-  padding: 6,
-  borderRadius: 6,
-  marginTop: 8,
-},
-actionButton: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  marginRight: 16,
-},
-
-actionText: {
-  fontSize: 14,
-  color: '#333',
-},
-
-commentInputRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  marginTop: 8,
-  borderWidth: 1,
-  borderColor: '#ccc',
-  borderRadius: 8,
-  paddingHorizontal: 10,
-  paddingVertical: Platform.OS === 'ios' ? 8 : 4,
-},
-
-commentInputText: {
-  flex: 1,
-  fontSize: 14,
-  color: '#333',
-  marginRight: 8,
-},
-searchContainer: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  backgroundColor: '#f2f2f2',
-  borderRadius: 12,
-  marginHorizontal: 16,
-  paddingHorizontal: 12,
-  paddingVertical: 8,
-  marginBottom: 10,
-  marginTop: 10,
-},
-
-searchInput: {
-  marginLeft: 8,
-  fontSize: 14,
-  flex: 1,
-  color: '#333',
-},
-commentRow: {
-  flexDirection: 'row',
-  alignItems: 'flex-start',
-  marginTop: 8,
-  gap: 10,
-},
-commentAvatar: {
-  width: 36,
-  height: 36,
-  borderRadius: 18,
-  backgroundColor: '#ccc',
-},
-commentName: {
-  fontWeight: 'bold',
-  fontSize: 14,
-  color: '#333',
-},
-commentText: {
-  fontSize: 14,
-  color: '#444',
-},
-
-commentRow: {
-  flexDirection: 'row',
-  alignItems: 'flex-start',
-  marginTop: 12,
-  gap: 10,
-},
-commentAvatar: {
-  width: 36,
-  height: 36,
-  borderRadius: 18,
-  backgroundColor: '#ccc',
-},
-commentHeader: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 8,
-},
-commentUsername: {
-  fontWeight: '600',
-  fontSize: 14,
-  color: '#333',
-},
-commentTime: {
-  fontSize: 12,
-  color: '#999',
-},
-commentContent: {
-  fontSize: 14,
-  color: '#444',
-  marginTop: 2,
-},
-searchContainer: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  padding: 10,
-  marginHorizontal: 16,
-  borderRadius: 8,
-  backgroundColor: '#f2f2f2',
-  marginTop: 10,
-},
-searchInput: {
-  flex: 1,
-  marginLeft: 8,
-  fontSize: 16,
-  color: '#333',
-},
-searchUserRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  padding: 10,
-  backgroundColor: '#fff',
-  borderBottomWidth: 1,
-  borderColor: '#eee',
-},
-userName: {
-  fontWeight: 'bold',
-  fontSize: 16,
-  color: '#333',
-},
-userSkill: {
-  color: '#666',
-  fontSize: 13,
-  marginTop: 2,
-},
-
-
-});
