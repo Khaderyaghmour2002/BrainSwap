@@ -5,7 +5,7 @@ import { createStackNavigator } from "@react-navigation/stack";
 
 import { theme } from "./client/core/theme";
 import AppNavigator from "./client/navigation/AppNavigator"; 
-
+;
 const Stack = createStackNavigator();
 
 export default function App() {

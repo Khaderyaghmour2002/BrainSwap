@@ -29,12 +29,21 @@ import {
   setDoc,
   onSnapshot,
   getDoc,
+  query,
+  collection,
+  where,
+  serverTimestamp,
 } from 'firebase/firestore';
+import { getHmsAuthToken } from '../../server/hmsToken';
+import IncomingCallModal from './IncomingCallModal';
 
 import { FirebaseAuth, FirestoreDB } from '../../server/firebaseConfig';
 import { colors } from '../assets/constants';
 
+
 const NewChatScreen = ({ route, navigation }) => {
+const [incomingCall, setIncomingCall] = useState(null); // { roomId, type, caller }
+
   const { user } = route.params;
   const currentUser = FirebaseAuth.currentUser;
   const chatId = [currentUser.uid, user.id].sort().join('_');
@@ -60,7 +69,7 @@ const NewChatScreen = ({ route, navigation }) => {
     };
     fetchUsersData();
   }, []);
-
+  
   useEffect(() => {
     const unsub = onSnapshot(doc(FirestoreDB, 'chats', chatId), (docSnap) => {
       if (docSnap.exists()) {
@@ -89,6 +98,86 @@ const NewChatScreen = ({ route, navigation }) => {
       backHandler.remove();
     };
   }, [chatId]);
+  const createCallDoc = useCallback(
+    ({ roomId, type }) => setDoc(doc(FirestoreDB, 'calls', roomId), {
+      roomId:"6879e51da48ca61c4647608d",
+      type,                  // 'voice' | 'video'
+      callerId: currentUser.uid,
+      receiverId: user.id,
+      status: 'ringing',
+      createdAt: serverTimestamp(),
+    }),
+    [currentUser, user.id],
+  );
+
+  /* ---------- התחלת שיחה ---------- */
+  const startCall = useCallback(
+    async (type) => {
+      if (!currentUser) { alert('User not authenticated yet'); return; }
+
+      const roomId = uuid.v4();
+      await createCallDoc({ roomId, type });
+
+      // אם תרצה token מהפונקציה: const token = await getHmsAuthToken({ roomId, role: 'host' });
+      navigation.navigate(
+        type === 'video' ? 'VideoCallScreen' : 'VoiceCallScreen',
+        { roomId, isCaller: true },
+      );
+    },
+    [currentUser, createCallDoc, navigation],
+  );
+
+  /* ---------- listener לשיחות נכנסות ---------- */
+  useEffect(() => {
+    if (!currentUser) return;
+    const q = query(
+      collection(FirestoreDB, 'calls'),
+      where('receiverId', '==', currentUser.uid),
+      where('status', '==', 'ringing'),
+    );
+    const unsub = onSnapshot(q, async (snap) => {
+      snap.docChanges().forEach(async (change) => {
+        if (change.type === 'added') {
+          const call = change.doc.data();
+          // TODO: show modal here
+          await setDoc(change.doc.ref, { status: 'accepted' }, { merge: true });
+          navigation.navigate(
+            call.type === 'video' ? 'VideoCallScreen' : 'VoiceCallScreen',
+            { roomId: call.roomId, isCaller: false },
+          );
+        }
+      });
+    });
+    return unsub;
+  }, [currentUser, navigation]);
+useEffect(() => {
+  if (!currentUser) return;
+
+  const q = query(
+    collection(FirestoreDB, 'calls'),
+    where('receiverId', '==', currentUser.uid),
+    where('status', '==', 'ringing'),
+  );
+
+  const unsub = onSnapshot(q, async (snap) => {
+    for (const change of snap.docChanges()) {
+      if (change.type === 'added') {
+        const call = change.doc.data();
+        const callerSnap = await getDoc(doc(FirestoreDB, 'users', call.callerId));
+        const caller = callerSnap.exists() ? callerSnap.data() : { name: 'Unknown', photoUrl: '' };
+
+        setIncomingCall({
+          docRef: change.doc.ref,
+          roomId: call.roomId,
+          type: call.type,
+          caller,
+        });
+      }
+    }
+  });
+
+  return unsub;
+}, [currentUser]);
 
   const onSend = useCallback(async (newMessages = []) => {
     const docRef = doc(FirestoreDB, 'chats', chatId);
@@ -178,6 +267,19 @@ const NewChatScreen = ({ route, navigation }) => {
       }
     );
   };
+const acceptCall = async () => {
+  await setDoc(incomingCall.docRef, { status: 'accepted' }, { merge: true });
+  navigation.navigate(
+    incomingCall.type === 'video' ? 'VideoCallScreen' : 'VoiceCallScreen',
+    { roomId: incomingCall.roomId, isCaller: false }
+  );
+  setIncomingCall(null);
+};
+
+const declineCall = async () => {
+  await setDoc(incomingCall.docRef, { status: 'declined' }, { merge: true });
+  setIncomingCall(null);
+};
 
   const handleSessionResponse = async (sessionId, isConfirmed) => {
     try {
@@ -209,8 +311,10 @@ const NewChatScreen = ({ route, navigation }) => {
       alert('Error updating session');
     }
   };
+  
 
   return (
+    
     <View style={{ flex: 1, backgroundColor: '#f2f2f7' }}>
   <View style={styles.header}>
   <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIcon}>
@@ -246,13 +350,20 @@ const NewChatScreen = ({ route, navigation }) => {
     <Ionicons name="calendar-outline" size={24} color="#fff" />
   </TouchableOpacity>
 
-  <TouchableOpacity style={styles.headerIcon} onPress={() => navigation.navigate('VoiceCallScreen', { user })}>
-    <Ionicons name="call-outline" size={24} color="#fff" />
-  </TouchableOpacity>
+  <TouchableOpacity
+  style={styles.headerIcon}
+  onPress={() => startCall('voice')}
+>
+  <Ionicons name="call-outline" size={24} color="#fff" />
+</TouchableOpacity>
 
-  <TouchableOpacity style={styles.headerIcon} onPress={() => navigation.navigate('VideoCallScreen', { user })}>
-    <Ionicons name="videocam-outline" size={24} color="#fff" />
-  </TouchableOpacity>
+<TouchableOpacity
+  style={styles.headerIcon}
+  onPress={() => startCall('video')}
+>
+  <Ionicons name="videocam-outline" size={24} color="#fff" />
+</TouchableOpacity>
+
 </View>
 
 
@@ -332,6 +443,16 @@ renderCustomView={({ currentMessage }) => {
         >
           {currentMessage.confirmationResult}
         </Text>
+        {incomingCall && (
+  <IncomingCallModal
+    visible={!!incomingCall}
+    caller={incomingCall.caller}
+    type={incomingCall.type}
+    onAccept={acceptCall}
+    onDecline={declineCall}
+  />
+)}
+
       </View>
     );
   }

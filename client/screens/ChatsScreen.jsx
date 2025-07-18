@@ -14,6 +14,7 @@ import {
   Modal,
   Image,
   TextInput,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -464,7 +465,8 @@ const styles = StyleSheet.create({
 searchBar1: {
   backgroundColor: '#f0f0f0',
   marginHorizontal: 16,
-  marginTop: 45,
+  marginTop: Platform.OS === 'ios' ? 45 : 20,
+  marginBottom: 10,
   padding: 10,
   borderRadius: 10,
   fontSize: 14,
