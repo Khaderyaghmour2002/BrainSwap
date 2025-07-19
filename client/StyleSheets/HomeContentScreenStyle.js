@@ -280,7 +280,7 @@ commentContent: {
 searchContainer: {
   flexDirection: 'row',
   alignItems: 'center',
-  padding: 10,
+  padding: Platform.OS === 'ios' ? 10 : 5,
   marginHorizontal: 16,
   borderRadius: 8,
   backgroundColor: '#f2f2f2',
@@ -408,11 +408,11 @@ modalContainer: {
   },
   addButton: {
   position: 'absolute',
-  top: Platform.OS === 'ios' ? 27 : 40,
+  top: Platform.OS === 'ios' ? 27 : 5,
   right: 1,
 
   borderRadius: 25,
-  padding: 8,
+  padding: Platform.OS === 'ios' ? 8 : 0,
   elevation: 5,
   zIndex: 100,
 },

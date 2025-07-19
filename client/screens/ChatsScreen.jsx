@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#fff',
     fontWeight: 'bold',
-    marginTop: 25,
+    marginTop: Platform.OS === 'ios' ? 20 : 0,
   },
   subtitle: {
     color: '#eee',
@@ -481,7 +481,7 @@ modalHeader: {
   flexDirection: 'row',
   alignItems: 'center',
   backgroundColor: '#128C7E',
-  paddingTop: 50,
+  paddingTop: Platform.OS === 'ios' ? 50 : 20,
   paddingBottom: 16,
   paddingHorizontal: 16,
   gap: 12,
